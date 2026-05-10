@@ -46,7 +46,93 @@ export class SemanticCacheService {
   }
 
   /**
-   * Get cached result
+   * Find similar cached queries using semantic similarity
+   */
+  async findSimilar(
+    query: string,
+    mode: string,
+    threshold = 0.85
+  ): Promise<{ hit: boolean; data?: unknown; sources?: unknown[]; age?: number; similarity?: number }> {
+    const queryEmbedding = await this.getEmbedding(query);
+    
+    if (!queryEmbedding.length) {
+      return { hit: false };
+    }
+
+    // Get all cache entries with embeddings from Redis
+    const keys = await semanticCache.keys('embedding:*');
+    
+    for (const key of keys) {
+      const fingerprint = key.replace('cache:embedding:', '');
+      const cached = await semanticCache.get(fingerprint);
+      if (!cached) continue;
+
+      // Check mode matches
+      if (cached.mode !== mode) continue;
+
+      // Get cached embedding
+      const cachedEmbedding = await semanticCache.getEmbedding(fingerprint);
+      if (!cachedEmbedding) continue;
+
+      // Calculate cosine similarity
+      const similarity = this.cosineSimilarity(queryEmbedding, cachedEmbedding);
+
+      if (similarity >= threshold) {
+        // Check freshness
+        const createdAt = new Date(cached.created_at as string).getTime();
+        const age = Date.now() - createdAt;
+
+        const ttlByMode: Record<string, number> = {
+          lite: 2 * 60 * 60 * 1000,
+          medium: 8 * 60 * 60 * 1000,
+          deep: 48 * 60 * 60 * 1000,
+        };
+
+        const maxAge = ttlByMode[mode] || ttlByMode.medium;
+
+        if (age > maxAge) {
+          // Expired - clean up
+          await semanticCache.delete(fingerprint);
+          continue;
+        }
+
+        return {
+          hit: true,
+          data: cached.result,
+          sources: cached.sources as unknown[],
+          age,
+          similarity,
+        };
+      }
+    }
+
+    return { hit: false };
+  }
+
+  /**
+   * Calculate cosine similarity between two vectors
+   */
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) {
+      throw new Error('Vectors must have same length');
+    }
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+
+    const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    return Math.max(0, similarity); // Clamp to [0, 1]
+  }
+
+  /**
+   * Get cached result by fingerprint (exact match)
    */
   async get(
     fingerprint: string,

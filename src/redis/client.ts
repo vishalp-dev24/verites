@@ -148,8 +148,26 @@ export const semanticCache = {
     await redis.setex(`cache:${fingerprint}`, ttlMinutes * 60, JSON.stringify(data));
   },
 
+  async setEmbedding(fingerprint: string, embedding: number[]): Promise<void> {
+    await redis.setex(
+      `cache:embedding:${fingerprint}`,
+      60 * 60 * 48, // 48 hours
+      JSON.stringify(embedding)
+    );
+  },
+
+  async getEmbedding(fingerprint: string): Promise<number[] | null> {
+    const data = await redis.get(`cache:embedding:${fingerprint}`);
+    return data ? JSON.parse(data) : null;
+  },
+
   async delete(fingerprint: string): Promise<void> {
     await redis.del(`cache:${fingerprint}`);
+    await redis.del(`cache:embedding:${fingerprint}`);
+  },
+
+  async keys(pattern: string): Promise<string[]> {
+    return redis.keys(`cache:${pattern}`);
   },
 };
 
