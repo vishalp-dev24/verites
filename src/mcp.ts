@@ -1,9 +1,8 @@
-
 /**
  * MCP Server Standalone Entry Point
  */
 
-import { MCPServer } from './api/mcp-server.js';
+// MCP server entry point - currently a stub
+// TODO: Implement MCP server when api/mcp-server.ts is created
 
-const server = new MCPServer();
-server.start().catch(console.error);
+console.log('MCP Server placeholder - api/mcp-server.ts not implemented yet');

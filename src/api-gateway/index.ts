@@ -120,6 +120,8 @@ app.post('/v1/research', validateApiKey, checkRateLimit, async (req: Request, re
       trace: {
         plan: {
           job_id: jobId,
+          query: validated.query,
+          mode: validated.mode,
           tasks: [],
           estimated_cost: {
             min_paise: 0,

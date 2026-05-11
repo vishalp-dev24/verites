@@ -102,19 +102,47 @@ export interface ResearchTrace {
 
 export interface TaskManifest {
   job_id: string;
+  query: string;
+  mode: ResearchMode;
   tasks: Task[];
   estimated_cost: CostEstimate;
+  session_context?: {
+    topics_researched: string[];
+    follow_up_queries: string[];
+  };
+  fingerprint?: string;
   created_at: string;
   locked: boolean;
 }
 
 export interface Task {
   task_id: string;
-  topic: string;
-  covers: string;
-  must_not_overlap_with: string[];
-  mode: ResearchMode;
+  topic?: string;
+  covers?: string;
+  must_not_overlap_with?: string[];
+  title?: string;
+  query?: string;
+  mode: string;
+  source_config?: {
+    max_sources: number;
+    target_sources: number;
+    date_range_days?: number;
+  };
+  coverage?: {
+    must_cover: string[];
+    must_not_overlap: string[];
+  };
+  estimated_cost?: {
+    min_paise: number;
+    max_paise: number;
+  };
   status: WorkerStatus;
+  created_at?: string;
+  updated_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  result?: unknown;
+  artifact_id?: string;
   checkpoint?: Checkpoint;
 }
 
@@ -217,5 +245,20 @@ export interface TrustScoreOutput {
     source_type_weight: number;
     citation_quality: number;
     consistency: number;
+  };
+}
+
+export interface TaskResult {
+  task_id: string;
+  status: 'completed' | 'failed';
+  summary: string;
+  sources: Source[];
+  processedUrls: string[];
+  artifacts: { raw: string; summary: string };
+  metadata: {
+    duration_ms: number;
+    sources_count: number;
+    queries_made: number;
+    tokens_used: number;
   };
 }

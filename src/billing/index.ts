@@ -270,23 +270,19 @@ export class BillingService {
     // Create subscription
     const subscription = await getRazorpay().subscriptions.create({
       plan_id: plan.planId,
-      customer_id: customerId,
       total_count: 12, // Monthly for 1 year
-      notify_info: {
-        email: true,
-        sms: false,
-      },
       notes: {
         tenantId,
         tier,
         credits: plan.credits,
+        customer_id: customerId,
       },
-    });
+    } as any);
 
     await prisma.tenant.update({
       where: { tenantId },
       data: {
-        razorpaySubscriptionId: subscription.id,
+        razorpaySubscriptionId: (subscription as any).id,
         tier,
       },
     });
@@ -300,20 +296,21 @@ export class BillingService {
         email: tenant.email,
         contact: contact,
         name: name || tenant.name,
-      },
+      } as any,
       notify: {
         email: true,
+        sms: false,
       },
       notes: {
         tenantId,
         tier,
-        subscriptionId: subscription.id,
+        subscriptionId: (subscription as any).id,
       },
       callback_url: `${process.env.DASHBOARD_URL || 'http://localhost:3000'}/billing/success`,
       callback_method: 'get',
     });
 
-    return { subscriptionId: subscription.id, shortUrl: paymentLink.short_url };
+    return { subscriptionId: (subscription as any).id, shortUrl: (paymentLink as any).short_url };
   }
 
   /**
@@ -381,9 +378,8 @@ export class BillingService {
       amount: amountRs * 100, // Convert to paise
       currency: 'INR',
       receipt: `credits_${tenantId}_${Date.now()}`,
-      notes: { tenantId, credits: credits.toString(), type: 'credit_topup' },
-      type: 'promotion', // for internal wallet credits
-    });
+      notes: { tenantId, credits: credits.toString() },
+    } as any);
 
     // Create payment link
     const paymentLink = await getRazorpay().paymentLink.create({
@@ -393,14 +389,14 @@ export class BillingService {
       customer: {
         email: tenant.email,
         name: tenant.name,
-      },
+      } as any,
       notify: { email: true },
-      notes: { tenantId, credits: credits.toString(), orderId: order.id },
+      notes: { tenantId, credits: credits.toString(), orderId: (order as any).id },
       callback_url: `${process.env.DASHBOARD_URL || 'http://localhost:3000'}/billing/topup-success`,
       callback_method: 'get',
     });
 
-    return { shortUrl: paymentLink.short_url, orderId: order.id };
+    return { shortUrl: (paymentLink as any).short_url, orderId: (order as any).id };
   }
 
   /**

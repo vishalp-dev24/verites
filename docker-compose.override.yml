@@ -1,0 +1,35 @@
+# Docker Compose override for development
+# This file is automatically used by docker-compose when present
+
+version: '3.8'
+
+services:
+  api:
+    # Override for development
+    volumes:
+      - .:/app:rw
+      - /app/node_modules
+      - /app/dist
+    environment:
+      NODE_ENV: development
+    command: ["npx", "tsx", "watch", "src/app.ts"]
+    restart: "no"
+
+  # Prisma Studio for database management (dev only)
+  prisma-studio:
+    image: node:22-alpine
+    container_name: veritas-prisma-studio
+    working_dir: /app
+    command: sh -c "npm install -g prisma && prisma studio --port 5555 --browser none"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-veritas}:${DB_PASSWORD:-veritas_secret}@postgres:5432/${DB_NAME:-veritas}
+    volumes:
+      - ./prisma:/app/prisma:ro
+    ports:
+      - "5555:5555"
+    depends_on:
+      - postgres
+    networks:
+      - veritas-network
+    profiles:
+      - studio  # Only start with: docker-compose --profile studio up prisma-studio

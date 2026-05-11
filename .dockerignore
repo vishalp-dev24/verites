@@ -1,0 +1,81 @@
+# Node.js
+node_modules
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+*.log
+
+# TypeScript
+dist
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+.github
+
+# Documentation that shouldn't be in image
+*.md
+!CHANGELOG.md
+!LICENSE.md
+
+# Testing
+coverage
+.nyc_output
+*.test.ts
+*.spec.ts
+tests/
+__tests__/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.docker
+
+# CI/CD
+.github
+.travis.yml
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# Misc
+.DS_Store
+*.tmp
+*.temp
+cache/
+temp/
+logs/*
+!logs/.gitkeep
+
+# Development only scripts (keep in repo, but not needed in prod image)
+scripts/start.sh
+scripts/dev*.sh
+
+# Local development overrides
+compose.override.yml
+docker-compose.override.yml
+
+# Prisma - don't need migrations in build
+# (run them as separate step)
+prisma/migrations
+
+# Large files
+*.mp4
+*.mov
+*.avi
+*.pdf
+*.zip
+*.tar.gz

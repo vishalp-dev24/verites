@@ -1,16 +1,18 @@
 
-import { Task, TaskResult, SessionMemory } from '../types/index.js';
+import { Task, TaskResult, Source } from '../types/index.js';
 import { blackboard } from '../blackboard/index.js';
 import { artifactStore } from '../artifact-store/index.js';
-import { searchService } from '../search/index.js';
+import { TavilySearchService } from '../search/providers/tavily.js';
 import { trustScorer } from '../trust-scorer/index.js';
 import { securityService } from '../security/index.js';
 import { prisma } from '../database/client.js';
 
+const searchService = new TavilySearchService();
+
 interface WorkerOptions {
   jobId: string;
   tenantId: string;
-  mode: string;
+  mode: 'lite' | 'medium' | 'deep';
 }
 
 export class WorkerFleet {
@@ -24,9 +26,9 @@ export class WorkerFleet {
     const taskId = task.task_id;
     const artifactId = task.artifact_id || `${this.options.jobId}_artifact_${taskId}`;
 
-    const blackboardData = await blackboard.read(this.options.jobId, this.options.mode);
-    const searchResults = await searchService.search(task.query, { maxResults: task.source_config.target_sources });
-    const sources = [];
+    const jobState = await blackboard.getJobState(this.options.jobId);
+    const searchResults = await searchService.search(task.query || '', { maxResults: task.source_config?.target_sources || 5 });
+    const sources: Partial<Source>[] = [];
 
     for (const result of searchResults) {
       const securityCheck = await securityService.classifyIntent({
@@ -37,8 +39,9 @@ export class WorkerFleet {
 
       if (securityCheck.action === 'block') continue;
 
-      const trustScore = trustScorer.calculate({
-        domain: result.domain,
+      const domain = new URL(result.url).hostname.replace('www.', '');
+      const trustScoreResult = trustScorer.calculate({
+        domain: domain,
         content_freshness_days: 365,
         source_type: 'secondary',
         citation_depth: 0,
@@ -48,11 +51,10 @@ export class WorkerFleet {
       sources.push({
         url: result.url,
         title: result.title,
-        domain: result.domain,
-        content_excerpt: result.content,
-        trust_score: trustScore.score,
-        publish_date: result.published_date,
-        source_type: 'secondary',
+        trust_score: trustScoreResult.score,
+        type: 'secondary',
+        publish_date: new Date().toISOString(),
+        content_excerpt: result.content.slice(0, 500),
       });
     }
 
@@ -60,13 +62,24 @@ export class WorkerFleet {
       task_id: taskId,
       status: 'completed',
       summary: sources.map(s => `- ${s.title}`).join('\n'),
-      sources,
-      processedUrls: sources.map(s => s.url),
+      sources: sources as Source[],
+      processedUrls: sources.map(s => s.url!),
       artifacts: { raw: `${artifactId}_raw`, summary: `${artifactId}_summary` },
       metadata: { duration_ms: 0, sources_count: sources.length, queries_made: 1, tokens_used: 0 },
     };
 
-    await artifactStore.save(artifactId, this.options.tenantId, result, 'result');
+    // Fix: artifactStore doesn't have save method, use create instead
+    await artifactStore.create({
+      artifactId: artifactId,
+      jobId: this.options.jobId,
+      taskId: taskId,
+      content: JSON.stringify(result),
+      sources: sources.map(s => ({
+        url: s.url,
+        title: s.title,
+        domain: new URL(s.url!).hostname,
+      })) as Record<string, unknown>[],
+    });
     return result;
   }
 

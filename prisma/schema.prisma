@@ -218,3 +218,19 @@ model CacheEntry {
   @@index([expiresAt])
   @@map("cache_entries")
 }
+
+// LLM usage metering
+model Metering {
+  id                String   @id @default(cuid())
+  jobId             String?  @map("job_id")
+  tenantId          String   @map("tenant_id")
+  service           String
+  tokens            Int
+  cost              Int
+  timestamp         DateTime @default(now())
+  
+  @@index([tenantId])
+  @@index([jobId])
+  @@index([timestamp])
+  @@map("metering")
+}

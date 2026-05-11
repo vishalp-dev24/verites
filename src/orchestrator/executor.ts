@@ -52,14 +52,14 @@ export class OrchestratorExecutor {
     const reDispatchedTasks: string[] = [];
     const doubtHistory: Doubt[] = [];
 
-    logger.info(`Starting orchestrator loop`, { jobId: config.jobId, query: config.originalQuery });
+    logger.info('Orchestrator', 'Starting orchestrator loop', { jobId: config.jobId, query: config.originalQuery });
 
     // Initial state from workers
     let currentFindings = await this.getCurrentFindings(config.jobId);
 
     while (iteration < config.maxIterations) {
       iteration++;
-      logger.info(`Orchestrator iteration ${iteration}`, { jobId: config.jobId });
+      logger.info('Orchestrator', `Orchestrator iteration ${iteration}`, { jobId: config.jobId });
 
       // Phase 1: Analyze for doubts
       const doubtAnalysis = await analyzeForDoubts(
@@ -68,7 +68,7 @@ export class OrchestratorExecutor {
         config.mode
       );
 
-      logger.debug(`Doubt analysis complete`, {
+      logger.debug('Orchestrator', 'Doubt analysis complete', {
         doubtsFound: doubtAnalysis.doubts.length,
         overallConfidence: doubtAnalysis.overallConfidence,
         recommendation: doubtAnalysis.recommendation,
@@ -78,7 +78,7 @@ export class OrchestratorExecutor {
 
       // Phase 2: Check termination conditions
       if (doubtAnalysis.overallConfidence >= config.qualityThreshold) {
-        logger.info(`Quality threshold met`, { confidence: doubtAnalysis.overallConfidence });
+        logger.info('Orchestrator', 'Quality threshold met', { confidence: doubtAnalysis.overallConfidence });
         return this.terminate(config, {
           confidence: doubtAnalysis.overallConfidence,
           findings: currentFindings,
@@ -92,7 +92,7 @@ export class OrchestratorExecutor {
       }
 
       if (doubtAnalysis.recommendation === 'proceed' && doubtAnalysis.doubts.length === 0) {
-        logger.info(`No doubts found, proceeding`);
+        logger.info('Orchestrator', 'No doubts found, proceeding');
         return this.terminate(config, {
           confidence: doubtAnalysis.overallConfidence,
           findings: currentFindings,
@@ -110,7 +110,7 @@ export class OrchestratorExecutor {
       totalCost += iterationCost;
 
       if (totalCost * 100 >= config.maxBudgetPaise) {
-        logger.warn(`Budget exhausted`, { totalCost, budget: config.maxBudgetPaise });
+        logger.warn('Orchestrator', 'Budget exhausted', { totalCost, budget: config.maxBudgetPaise });
         return this.terminate(config, {
           confidence: doubtAnalysis.overallConfidence,
           findings: currentFindings,
@@ -129,16 +129,16 @@ export class OrchestratorExecutor {
         .slice(0, 2);
 
       if (topDoubts.length === 0) {
-        logger.info(`No high-severity doubts to address`);
+        logger.info('Orchestrator', 'No high-severity doubts to address');
         break;
       }
 
-      logger.info(`Re-dispatching for ${topDoubts.length} doubts`);
+      logger.info('Orchestrator', `Re-dispatching for ${topDoubts.length} doubts`);
 
       for (const doubt of topDoubts) {
         const task = this.doubtToTask(doubt, config);
         
-        logger.debug(`Dispatching task for doubt`, {
+        logger.debug('Orchestrator', 'Dispatching task for doubt', {
           doubtId: doubt.id,
           type: doubt.type,
           query: task.topic,
@@ -166,7 +166,7 @@ export class OrchestratorExecutor {
 
     // Max iterations reached
     const finalConfidence = await this.calculateFinalConfidence(config.jobId);
-    logger.info(`Max iterations reached`, { iterations: iteration, finalConfidence });
+    logger.info('Orchestrator', 'Max iterations reached', { iterations: iteration, finalConfidence });
 
     return this.terminate(config, {
       confidence: finalConfidence,

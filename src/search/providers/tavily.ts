@@ -1,53 +1,48 @@
-
 /**
- * Tavily Search Integration
- * Production-ready search with API key rotation
+ * Tavily Search Provider
+ * 
+ * Uses Tavily API for intelligent web search with AI-powered results
  */
 
 import axios from 'axios';
-import { searchConfig } from '../config/search.js';
+
+// Config from environment
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
 export interface SearchResult {
   title: string;
   url: string;
   content: string;
-  published_date?: string;
-  score: number;
+  source: string;
+  confidence: number;
 }
 
 export class TavilySearchService {
   private apiKey: string;
-  private baseUrl = 'https://api.tavily.com';
-
+  
   constructor() {
-    this.apiKey = process.env.TAVILY_API_KEY || '';
-    if (!this.apiKey) {
-      console.warn('TAVILY_API_KEY not set, search will fail');
-    }
+    this.apiKey = TAVILY_API_KEY;
   }
 
-  async search(
-    query: string,
-    options: {
-      search_depth?: 'basic' | 'advanced';
-      max_results?: number;
-      include_answer?: boolean;
-      include_images?: boolean;
-      include_raw_content?: boolean;
-      days?: number;
-    } = {}
-  ): Promise<SearchResult[]> {
+  async search(query: string, options?: {
+    topic?: 'general' | 'news' | 'finance' | 'law';
+    maxResults?: number;
+    days?: number;
+  }): Promise<SearchResult[]> {
+    if (!this.apiKey) {
+      throw new Error('Tavily API key not configured');
+    }
+
     const response = await axios.post(
-      `${this.baseUrl}/search`,
+      'https://api.tavily.com/search',
       {
         query,
         api_key: this.apiKey,
-        search_depth: options.search_depth || 'advanced',
-        max_results: options.max_results || 10,
-        include_answer: options.include_answer ?? false,
-        include_images: options.include_images ?? false,
-        include_raw_content: options.include_raw_content ?? true,
-        days: options.days,
+        search_depth: 'advanced',
+        include_answer: true,
+        include_images: false,
+        topic: options?.topic || 'general',
+        max_results: options?.maxResults || 10,
       },
       {
         timeout: 30000,
@@ -64,26 +59,20 @@ export class TavilySearchService {
     }
 
     return data.results.map((result: any) => ({
-      title: result.title || 'Untitled',
-      url: result.url,
-      content: result.content || result.raw_content || '',
-      published_date: result.published_date,
-      score: result.score || 0,
+      title: result.title || '',
+      url: result.url || '',
+      content: result.content || result.snippet || '',
+      source: this.extractDomain(result.url || ''),
+      confidence: result.score || 0.7,
     }));
   }
 
-  async batchSearch(
-    queries: string[],
-    options: { max_results?: number } = {}
-  ): Promise<SearchResult[][]> {
-    const results = await Promise.all(
-      queries.map(q => this.search(q, { max_results: options.max_results }).catch(err => {
-        console.error(`Search failed for "${q}":`, err.message);
-        return [];
-      }))
-    );
-    return results;
+  private extractDomain(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname.replace('www.', '');
+    } catch {
+      return url;
+    }
   }
 }
-
-export const tavilySearch = new TavilySearchService();

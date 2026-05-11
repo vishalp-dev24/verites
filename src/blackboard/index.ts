@@ -1,261 +1,234 @@
 /**
- * Blackboard
- * Shared worker intelligence store
+ * Blackboard - Collaborative Knowledge Store
  * 
- * Contents:
- * - Verified facts agreed across workers
- * - Contradictions detected between workers
- * - Domain access log (prevents thundering herd)
- * - Worker status per task
- * 
- * Orchestrator reads from Blackboard only - never raw worker output directly
- * This keeps orchestrator context flat regardless of worker count
+ * Based on blackboard pattern where multiple workers
+ * contribute facts that are consolidated and validated
  */
 
-import { redis, blackboard } from '../redis/client.js';
-import { Fact, Contradiction, DomainAccess, BlackboardEntry } from '../types/index.js';
+import { redis } from '../redis/client.js';
+import { prisma } from '../database/client.js';
 
-export class BlackboardService {
+export interface Fact {
+  id: string;
+  claim: string;
+  confidence: number;
+  sources: string[];
+  verified: boolean;
+  timestamp: string;
+  worker?: string;
+  task?: string;
+}
+
+export interface Contradiction {
+  claim_a: string;
+  claim_b: string;
+  source_a: string;
+  source_b: string;
+  severity: 'high' | 'medium' | 'low';
+  detected_at: string;
+  status: 'open' | 'resolved' | 'dismissed';
+}
+
+export interface BlackboardEntry {
+  id: string;
+  value: string;
+  sources: string[];
+  confidence: number;
+  verified: boolean;
+  timestamp: string;
+}
+
+interface WorkerStatus {
+  status: string;
+  lastPing: string;
+}
+
+export class Blackboard {
   private jobId: string;
   private tenantId: string;
+  private _facts: Fact[] = [];
+  private _contradictions: Contradiction[] = [];
+  private _workerStatus: Record<string, WorkerStatus> = {};
 
   constructor(jobId: string, tenantId: string) {
     this.jobId = jobId;
     this.tenantId = tenantId;
   }
 
-  /**
-   * Initialize blackboard for a new job
-   */
   async initialize(): Promise<void> {
-    const entry: BlackboardEntry = {
-      job_id: this.jobId,
-      task_id: 'master',
-      verified_facts: [],
-      contradictions: [],
-      domain_access_log: [],
-      worker_status: {},
-      updated_at: new Date().toISOString(),
-    };
+    const record = await prisma.researchJob.findUnique({
+      where: { jobId: this.jobId },
+    });
 
-    await blackboard.set(this.jobId, entry, 7200); // 2 hour TTL
-  }
-
-  /**
-   * Add a verified fact from a worker
-   */
-  async addFact(fact: Fact): Promise<void> {
-    const existingFacts = await blackboard.getFacts(this.jobId);
-    
-    // Check if similar fact already exists
-    const similarFact = existingFacts.find(f => 
-      this.levenshteinSimilarity(f.claim as string, fact.claim) > 0.8
-    );
-
-    if (similarFact) {
-      // Merge sources
-      await this.mergeFactSources(similarFact, fact);
-    } else {
-      await blackboard.appendFact(this.jobId, fact);
-    }
-
-    await this.updateTimestamp();
-  }
-
-  /**
-   * Log a contradiction between sources
-   */
-  async logContradiction(contradiction: Contradiction): Promise<void> {
-    await blackboard.logContradiction(this.jobId, contradiction);
-    await this.updateTimestamp();
-  }
-
-  /**
-   * Record domain access (for throttling)
-   */
-  async recordDomainAccess(domain: string): Promise<void> {
-    await blackboard.logDomainAccess(this.jobId, domain);
-  }
-
-  /**
-   * Check if domain is being heavily accessed
-   */
-  async isDomainThrottled(domain: string, maxWorkers = 2): Promise<boolean> {
-    const count = await blackboard.getDomainAccess(this.jobId, domain);
-    return count >= maxWorkers;
-  }
-
-  /**
-   * Update worker status
-   */
-  async updateWorkerStatus(taskId: string, status: string): Promise<void> {
-    const entry = await blackboard.get(this.jobId);
-    if (entry) {
-      entry.worker_status = {
-        ...entry.worker_status,
-        [taskId]: status,
-      };
-      entry.updated_at = new Date().toISOString();
-      await blackboard.set(this.jobId, entry);
-    }
-  }
-
-  /**
-   * Get all verified facts
-   */
-  async getFacts(): Promise<Fact[]> {
-    return blackboard.getFacts(this.jobId);
-  }
-
-  /**
-   * Get all contradictions
-   */
-  async getContradictions(): Promise<Contradiction[]> {
-    return blackboard.getContradictions(this.jobId);
-  }
-
-  /**
-   * Get worker statuses
-   */
-  async getWorkerStatuses(): Promise<Record<string, string>> {
-    const entry = await blackboard.get(this.jobId);
-    return entry?.worker_status as Record<string, string> || {};
-  }
-
-  /**
-   * Get domain access log
-   */
-  async getDomainAccessLog(): Promise<DomainAccess[]> {
-    const entry = await blackboard.get(this.jobId);
-    return entry?.domain_access_log as DomainAccess[] || [];
-  }
-
-  /**
-   * Get full blackboard for orchestrator
-   */
-  async getFullBlackboard(): Promise<BlackboardEntry | null> {
-    const facts = await this.getFacts();
-    const contradictions = await this.getContradictions();
-    const workerStatuses = await this.getWorkerStatuses();
-    const domainAccess = await this.getDomainAccessLog();
-
-    return {
-      job_id: this.jobId,
-      task_id: 'master',
-      verified_facts: facts,
-      contradictions,
-      domain_access_log: domainAccess,
-      worker_status: workerStatuses,
-      updated_at: new Date().toISOString(),
-    };
-  }
-
-  /**
-   * Compress blackboard for context window
-   */
-  async getCompressedSummary(): Promise<string> {
-    const facts = await this.getFacts();
-    const contradictions = await this.getContradictions();
-
-    const factsSummary = facts
-      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-      .slice(0, 20) // Top 20 facts
-      .map(f => `- ${f.claim} (sources: ${(f.sources || []).length}, confidence: ${f.confidence})`)
-      .join('\n');
-
-    const contradictionsSummary = contradictions
-      .slice(0, 5) // Top 5 contradictions
-      .map(c => `! ${c.claim_a} vs ${c.claim_b}`)
-      .join('\n');
-
-    return `FACTS:\n${factsSummary}\n\nCONTRADICTIONS:\n${contradictionsSummary}`;
-  }
-
-  /**
-   * Cleanup after job completion
-   */
-  async cleanup(): Promise<void> {
-    await blackboard.cleanup(this.jobId);
-  }
-
-  /**
-   * Check if job has facts
-   */
-  async hasData(): Promise<boolean> {
-    const facts = await this.getFacts();
-    return facts.length > 0;
-  }
-
-  /**
-   * Get fact count
-   */
-  async getFactCount(): Promise<number> {
-    const facts = await this.getFacts();
-    return facts.length;
-  }
-
-  /**
-   * Get contradiction count
-   */
-  async getContradictionCount(): Promise<number> {
-    const contradictions = await this.getContradictions();
-    return contradictions.length;
-  }
-
-  private async updateTimestamp(): Promise<void> {
-    const entry = await blackboard.get(this.jobId);
-    if (entry) {
-      entry.updated_at = new Date().toISOString();
-      await blackboard.set(this.jobId, entry);
-    }
-  }
-
-  private levenshteinSimilarity(str1: string, str2: string): number {
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= str1.length; i++) {
-      matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= str2.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str1.length; i++) {
-      for (let j = 1; j <= str2.length; j++) {
-        const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1, // deletion
-          matrix[i][j - 1] + 1, // insertion
-          matrix[i - 1][j - 1] + cost // substitution
-        );
+    if (record && record.data) {
+      const data = record.data as Record<string, unknown>;
+      if (data.facts && Array.isArray(data.facts)) {
+        this._facts = data.facts as Fact[];
+      }
+      if (data.contradictions && Array.isArray(data.contradictions)) {
+        this._contradictions = data.contradictions as Contradiction[];
       }
     }
-
-    const distance = matrix[str1.length][str2.length];
-    const maxLen = Math.max(str1.length, str2.length);
-    return maxLen === 0 ? 1 : 1 - distance / maxLen;
   }
 
-  private async mergeFactSources(existing: Record<string, unknown>, newFact: Fact): Promise<void> {
-    const existingSources = (existing.sources as string[]) || [];
-    const newSources = (newFact.sources || []).filter(s => !existingSources.includes(s));
-    
-    if (newSources.length > 0) {
-      // Update confidence
-      const totalSources = existingSources.length + newSources.length;
-      const newConfidence = Math.min(1.0, (existing.confidence as number || 0) + 0.1 * newSources.length);
-      
-      existing.sources = [...existingSources, ...newSources];
-      existing.confidence = newConfidence;
-      existing.verified = true;
+  async addEntry(entry: BlackboardEntry): Promise<void> {
+    const fact: Fact = {
+      id: entry.id,
+      claim: entry.value,
+      confidence: entry.confidence,
+      sources: entry.sources,
+      verified: entry.verified,
+      timestamp: entry.timestamp,
+    };
+    this._facts.push(fact);
+    await this.persist();
+  }
+
+  async addVerifiedFact(fact: Fact): Promise<void> {
+    this._facts.push(fact);
+    await this.persist();
+  }
+
+  async addContradiction(contradiction: Contradiction): Promise<void> {
+    this._contradictions.push(contradiction);
+    await this.persist();
+  }
+
+  async updateWorkerStatus(workerId: string, status: string): Promise<void> {
+    this._workerStatus[workerId] = { status, lastPing: new Date().toISOString() };
+  }
+
+  getFacts(): Fact[] {
+    return this._facts;
+  }
+
+  getContradictions(): Contradiction[] {
+    return this._contradictions;
+  }
+
+  getWorkerStatus(): Record<string, WorkerStatus> {
+    return this._workerStatus;
+  }
+
+  async persist(): Promise<void> {
+    await prisma.researchJob.update({
+      where: { jobId: this.jobId },
+      data: {
+        data: {
+          facts: this._facts,
+          contradictions: this._contradictions,
+        } as object,
+      },
+    });
+  }
+
+  async getFinalOutput(): Promise<{
+    facts: Fact[];
+    contradictions: Contradiction[];
+    summary: string;
+  }> {
+    return {
+      facts: this._facts,
+      contradictions: this._contradictions,
+      summary: this.generateSummary(),
+    };
+  }
+
+  private generateSummary(): string {
+    const verifiedFacts = this._facts.filter(f => f.verified);
+    return `Research completed with ${verifiedFacts.length} verified facts ` +
+           `and ${this._contradictions.length} contradictions.`;
+  }
+}
+
+// Singleton for non-job-specific operations
+export const blackboard = {
+  async get(jobId: string): Promise<Record<string, unknown> | null> {
+    // Get from Redis
+    const data = await redis.get(`blackboard${jobId}:data`);
+    if (data) {
+      return JSON.parse(data);
     }
-  }
-}
+    
+    // Fallback to Prisma
+    const record = await prisma.researchJob.findUnique({
+      where: { jobId },
+    });
+    return record?.data as Record<string, unknown> || null;
+  },
 
-export function createBlackboard(jobId: string, tenantId: string): BlackboardService {
-  return new BlackboardService(jobId, tenantId);
-}
+  async set(jobId: string, data: Record<string, unknown>): Promise<void> {
+    await redis.setex(`blackboard${jobId}:data`, 3600, JSON.stringify(data));
+    
+    await prisma.researchJob.update({
+      where: { jobId },
+      data: { data: data as object },
+    });
+  },
 
-// Re-export blackboard from redis client for compatibility
-export { blackboard } from '../redis/client.js';
+  async update(jobId: string, updates: Record<string, unknown>): Promise<void> {
+    const existing = await this.get(jobId) || {};
+    const merged = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    await this.set(jobId, merged);
+  },
+
+  async appendFact(jobId: string, fact: unknown): Promise<void> {
+    const factsKey = `blackboard${jobId}:facts`;
+    await redis.lpush(factsKey, JSON.stringify(fact));
+  },
+
+  async getFacts(jobId: string): Promise<Fact[]> {
+    const factsKey = `blackboard${jobId}:facts`;
+    const facts = await redis.lrange(factsKey, 0, -1);
+    return facts.map((f: string) => JSON.parse(f) as Fact);
+  },
+
+  async getJobState(jobId: string): Promise<{ verifiedFacts: Fact[] } | null> {
+    const facts = await this.getFacts(jobId);
+    return { verifiedFacts: facts };
+  },
+
+  async addVerifiedFact(
+    jobId: string,
+    _taskId: string,
+    findings: string,
+    sources: string[]
+  ): Promise<void> {
+    const fact: Fact = {
+      id: `fact_${Date.now()}`,
+      claim: findings,
+      sources,
+      confidence: 0.8,
+      verified: true,
+      timestamp: new Date().toISOString(),
+    };
+    await this.appendFact(jobId, fact);
+  },
+
+  async logContradiction(jobId: string, contradiction: Contradiction): Promise<void> {
+    const key = `blackboard${jobId}:contradictions`;
+    await redis.lpush(key, JSON.stringify(contradiction));
+  },
+
+  async getContradictions(jobId: string): Promise<Contradiction[]> {
+    const key = `blackboard${jobId}:contradictions`;
+    const contradictions = await redis.lrange(key, 0, -1);
+    return contradictions.map((c: string) => JSON.parse(c) as Contradiction);
+  },
+
+  async logDomainAccess(jobId: string, domain: string): Promise<void> {
+    await redis.hincrby(`blackboard${jobId}:domains`, domain, 1);
+  },
+
+  async getDomainAccess(jobId: string, domain: string): Promise<number> {
+    const count = await redis.hget(`blackboard${jobId}:domains`, domain);
+    return parseInt(count || '0', 10);
+  },
+
+  async cleanup(jobId: string): Promise<void> {
+    const keys = await redis.keys(`blackboard${jobId}*`);
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  },
+};

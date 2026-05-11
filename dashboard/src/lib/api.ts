@@ -1,132 +1,228 @@
 /**
- * Dashboard API Service
- * Client for Research Platform backend
+ * API Client
+ * Dashboard API service with error handling and retries
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { delay } from './utils';
+import type {
+  ApiResponse,
+  DashboardStats,
+  ResearchJob,
+  ResearchRequest,
+  ResearchResponse,
+  CreditInfo,
+  UsageBreakdown,
+  SecurityEvent,
+  ApiKey,
+  HealthStatus,
+} from '../types';
 
-interface ApiResponse<T> {
-  data?: T;
-  error?: string;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+interface RequestConfig extends RequestInit {
+  retries?: number;
 }
 
-async function fetchJson<T>(url: string, options?: RequestInit): Promise<ApiResponse<T>> {
+/**
+ * Check if API key is set
+ */
+function hasApiKey(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !!localStorage.getItem('apiKey');
+}
+
+/**
+ * Get API headers
+ */
+function getHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (typeof window !== 'undefined') {
+    const apiKey = localStorage.getItem('apiKey');
+    if (apiKey) {
+      headers['X-API-Key'] = apiKey;
+    }
+  }
+  
+  return headers;
+}
+
+/**
+ * Fetch with retry logic
+ */
+async function fetchWithRetry<T>(
+  url: string,
+  config: RequestConfig = {}
+): Promise<ApiResponse<T>> {
+  const { retries = MAX_RETRIES, ...fetchConfig } = config;
+  
   try {
-    const response = await fetch(`${API_BASE}${url}`, {
+    const response = await fetch(url, {
+      ...fetchConfig,
       headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': localStorage.getItem('apiKey') || '',
-        ...options?.headers,
+        ...getHeaders(),
+        ...fetchConfig.headers,
       },
-      ...options,
     });
 
+    // Handle rate limiting with retry
+    if (response.status === 429 && retries > 0) {
+      const retryAfter = response.headers.get('Retry-After');
+      const delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : RETRY_DELAY;
+      await delay(delayMs);
+      return fetchWithRetry(url, { ...config, retries: retries - 1 });
+    }
+
+    // Handle server errors with retry
+    if (response.status >= 500 && retries > 0) {
+      await delay(RETRY_DELAY);
+      return fetchWithRetry(url, { ...config, retries: retries - 1 });
+    }
+
     if (!response.ok) {
-      return { error: `HTTP ${response.status}: ${response.statusText}` };
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch {
+        // Use default error message if JSON parsing fails
+      }
+      
+      return { error: errorMessage };
     }
 
     const data = await response.json();
     return { data };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Network error' };
+    if (retries > 0) {
+      await delay(RETRY_DELAY);
+      return fetchWithRetry(url, { ...config, retries: retries - 1 });
+    }
+    
+    return { 
+      error: error instanceof Error ? error.message : 'Network error. Please check your connection.' 
+    };
   }
 }
 
-// Dashboard Stats
-export interface DashboardStats {
-  total_jobs: number;
-  jobs_today: number;
-  active_jobs: number;
-  credits_remaining: number;
-  avg_research_time: number;
-  queue_length: number;
+// ==================== Dashboard ====================
+
+export async function getDashboardStats(): Promise<ApiResponse<DashboardStats>> {
+  return fetchWithRetry(`${API_BASE}/api/stats`);
 }
 
-export function getDashboardStats(): Promise<ApiResponse<DashboardStats>> {
-  return fetchJson('/api/stats');
+// ==================== Jobs ====================
+
+export async function getJobs(
+  page = 1,
+  limit = 20,
+  status?: string
+): Promise<ApiResponse<{ jobs: ResearchJob[]; total: number; page: number; totalPages: number }>> {
+  const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+  if (status) params.append('status', status);
+  return fetchWithRetry(`${API_BASE}/api/jobs?${params}`);
 }
 
-// Research Jobs
-export interface ResearchJob {
-  job_id: string;
-  session_id: string;
-  query: string;
-  mode: string;
-  status: string;
-  confidence_score: number;
-  credits_used: number;
-  created_at: string;
-  completed_at?: string;
-  error?: string;
+export async function getJob(jobId: string): Promise<ApiResponse<ResearchJob>> {
+  return fetchWithRetry(`${API_BASE}/api/jobs/${jobId}`);
 }
 
-export function getJobs(page = 1, limit = 20): Promise<ApiResponse<{ jobs: ResearchJob[]; total: number; page: number }>> {
-  return fetchJson(`/api/jobs?page=${page}&limit=${limit}`);
+export async function cancelJob(jobId: string): Promise<ApiResponse<void>> {
+  return fetchWithRetry(`${API_BASE}/api/jobs/${jobId}/cancel`, {
+    method: 'POST',
+  });
 }
 
-export function getJob(jobId: string): Promise<ApiResponse<ResearchJob>> {
-  return fetchJson(`/api/jobs/${jobId}`);
-}
+// ==================== Research ====================
 
-// Credits
-export interface CreditInfo {
-  balance: number;
-  used_this_month: number;
-  tier: string;
-  tier_name: string;
-}
-
-export function getCredits(): Promise<ApiResponse<CreditInfo>> {
-  return fetchJson('/api/credits');
-}
-
-// Security Events
-export interface SecurityEvent {
-  type: string;
-  risk_score: number;
-  source_url?: string;
-  action: string;
-  timestamp: string;
-}
-
-export function getSecurityEvents(page = 1): Promise<ApiResponse<{ events: SecurityEvent[]; total: number }>> {
-  return fetchJson(`/api/security/events?page=${page}`);
-}
-
-// Research API
-export interface ResearchRequest {
-  query: string;
-  mode: 'lite' | 'medium' | 'deep';
-  output_schema?: Record<string, unknown>;
-}
-
-export interface ResearchResponse {
-  job_id: string;
-  status: string;
-  estimated_time: number;
-}
-
-export function createResearch(request: ResearchRequest): Promise<ApiResponse<ResearchResponse>> {
-  return fetchJson('/api/research', {
+export async function createResearch(
+  request: ResearchRequest
+): Promise<ApiResponse<ResearchResponse>> {
+  return fetchWithRetry(`${API_BASE}/api/research`, {
     method: 'POST',
     body: JSON.stringify(request),
   });
 }
 
-// Health Check
-export function healthCheck(): Promise<ApiResponse<{ status: string; version: string; timestamp: string }>> {
-  return fetchJson('/health');
+export async function getResearchResult(jobId: string): Promise<ApiResponse<ResearchJob>> {
+  return fetchWithRetry(`${API_BASE}/api/research/${jobId}/result`);
 }
 
-// API Key management
-export function setApiKey(key: string): void {
-  localStorage.setItem('apiKey', key);
+// ==================== Credits ====================
+
+export async function getCredits(): Promise<ApiResponse<CreditInfo>> {
+  return fetchWithRetry(`${API_BASE}/api/credits`);
 }
 
-export function getApiKey(): string | null {
-  return localStorage.getItem('apiKey');
+export async function getUsageBreakdown(
+  days = 30
+): Promise<ApiResponse<UsageBreakdown[]>> {
+  return fetchWithRetry(`${API_BASE}/api/credits/usage?days=${days}`);
 }
 
-export function clearApiKey(): void {
-  localStorage.removeItem('apiKey');
+// ==================== Security ====================
+
+export async function getSecurityEvents(
+  page = 1,
+  limit = 50
+): Promise<ApiResponse<{ events: SecurityEvent[]; total: number }>> {
+  return fetchWithRetry(`${API_BASE}/api/security/events?page=${page}&limit=${limit}`);
 }
+
+// ==================== API Keys ====================
+
+export async function getApiKeys(): Promise<ApiResponse<ApiKey[]>> {
+  return fetchWithRetry(`${API_BASE}/api/keys`);
+}
+
+export async function createApiKey(
+  name: string,
+  permissions: string[] = ['read', 'write']
+): Promise<ApiResponse<ApiKey & { full_key: string }>> {
+  return fetchWithRetry(`${API_BASE}/api/keys`, {
+    method: 'POST',
+    body: JSON.stringify({ name, permissions }),
+  });
+}
+
+export async function revokeApiKey(keyId: string): Promise<ApiResponse<void>> {
+  return fetchWithRetry(`${API_BASE}/api/keys/${keyId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ==================== Health ====================
+
+export async function healthCheck(): Promise<ApiResponse<HealthStatus>> {
+  return fetchWithRetry(`${API_BASE}/health`);
+}
+
+// ==================== Local Storage ====================
+
+export const apiKeyStorage = {
+  set: (key: string): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('apiKey', key);
+    }
+  },
+  
+  get: (): string | null => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('apiKey');
+    }
+    return null;
+  },
+  
+  clear: (): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('apiKey');
+    }
+  },
+  
+  has: (): boolean => hasApiKey(),
+};

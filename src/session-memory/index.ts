@@ -69,7 +69,7 @@ export class SessionMemoryService {
       }
     }
 
-    return session as SessionMemory;
+    return session as unknown as SessionMemory;
   }
 
   /**
@@ -158,9 +158,35 @@ export class SessionMemoryService {
   /**
    * Clear session
    */
-  async clearSession(sessionId: string): Promise<void> {
+  async clearSession(sessionId: string, _tenantId: string): Promise<void> {
     await prisma.session.deleteMany({ where: { sessionId } });
     await sessionMemory.delete(sessionId);
+  }
+
+  /**
+   * Add research to session
+   */
+  async addToSession(
+    sessionId: string,
+    data: {
+      query: string;
+      mode: string;
+      sources: number;
+      confidence: number;
+      summary: string;
+    },
+    tenantId: string
+  ): Promise<void> {
+    await this.addTopic(sessionId, data.query);
+    await this.addConclusion(sessionId, data.summary);
+    
+    // Store summary in Prisma
+    await prisma.session.updateMany({
+      where: { sessionId },
+      data: {
+        updatedAt: new Date(),
+      },
+    });
   }
 
   /**
@@ -174,9 +200,9 @@ export class SessionMemoryService {
     await prisma.session.upsert({
       where: { sessionId },
       update: {
-        topicsResearched: session.topics_researched,
-        keyConclusions: session.key_conclusions,
-        followUpQueries: session.follow_up_queries,
+        topicsResearched: session.topics_researched as string[],
+        keyConclusions: session.key_conclusions as string[],
+        followUpQueries: session.follow_up_queries as string[],
         updatedAt: new Date(),
       },
       create: {

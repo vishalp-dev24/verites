@@ -216,7 +216,7 @@ export class PlanningLayer {
         min_paise: topics.length * this.baseCostPerSource,
         max_paise: topics.length * this.baseCostPerSource * 2,
       },
-      status: 'pending',
+      status: 'planning' as const,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       started_at: undefined,

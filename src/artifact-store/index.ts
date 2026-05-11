@@ -252,6 +252,13 @@ export class ArtifactStore {
       console.error(`[ArtifactStore] Failed to delete from S3: ${artifactId}`, error);
     }
   }
+
+  async saveArtifact(artifactId: string, data: Buffer): Promise<void> {
+    await prisma.artifact.update(
+      { where: { artifactId },
+      data: { rawHtml: data.toString('base64') } }
+    );
+  }
 }
 
 export const artifactStore = new ArtifactStore();

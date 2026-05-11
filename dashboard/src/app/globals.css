@@ -1,32 +1,346 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+@layer base {
+  :root {
+    /* Design System - Linear/Vercel inspired dark theme */
+    
+    /* Background colors */
+    --background: #0a0a0f;
+    --background-elevated: #111118;
+    --background-surface: #16161f;
+    --background-surface-hover: #1c1c26;
+    --background-subtle: #1f1f2a;
+    
+    /* Foreground colors */
+    --foreground: #fafafa;
+    --foreground-muted: #a1a1aa;
+    --foreground-subtle: #71717a;
+    --foreground-disabled: #52525b;
+    
+    /* Border colors */
+    --border: #27273a;
+    --border-subtle: #1f1f2e;
+    --border-hover: #3f3f5a;
+    
+    /* Primary accent - violet/indigo blend */
+    --primary: #8b5cf6;
+    --primary-hover: #7c3aed;
+    --primary-active: #6d28d9;
+    --primary-subtle: #8b5cf620;
+    --primary-glow: #8b5cf640;
+    
+    /* Status colors */
+    --success: #10b981;
+    --success-hover: #059669;
+    --success-subtle: #10b98120;
+    --success-glow: #10b98140;
+    
+    --warning: #f59e0b;
+    --warning-hover: #d97706;
+    --warning-subtle: #f59e0b20;
+    --warning-glow: #f59e0b40;
+    
+    --error: #ef4444;
+    --error-hover: #dc2626;
+    --error-subtle: #ef444420;
+    --error-glow: #ef444440;
+    
+    --info: #3b82f6;
+    --info-hover: #2563eb;
+    --info-subtle: #3b82f620;
+    --info-glow: #3b82f640;
+    
+    /* Mode-specific colors */
+    --mode-lite: #10b981;
+    --mode-lite-subtle: #10b98120;
+    --mode-medium: #f59e0b;
+    --mode-medium-subtle: #f59e0b20;
+    --mode-deep: #8b5cf6;
+    --mode-deep-subtle: #8b5cf620;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.6);
+    --shadow-glow: 0 0 40px -10px var(--primary-glow);
+    
+    /* Radii */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+  }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+@layer base {
+  * {
+    @apply border-[var(--border)];
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  
+  /* Selection */
+  ::selection {
+    @apply bg-[var(--primary-subtle)] text-[var(--foreground)];
+  }
+  
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-[var(--border)] rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-[var(--border-hover)];
+  }
+  
+  /* Focus ring */
+  :focus-visible {
+    @apply outline-none ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-[var(--background)];
+  }
 }
 
 @layer components {
-  .btn-primary {
-    @apply px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors;
-  }
-  .btn-secondary {
-    @apply px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors;
-  }
+  /* Card component */
   .card {
-    @apply bg-white shadow-md rounded-lg p-6;
+    @apply bg-[var(--background-surface)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 
+           transition-all duration-200;
+  }
+  
+  .card-hover {
+    @apply hover:border-[var(--border-hover)] hover:shadow-lg;
+  }
+  
+  .card-elevated {
+    @apply bg-[var(--background-elevated)] border-[var(--border-subtle)] shadow-md;
+  }
+  
+  /* Button components */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)]
+           transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--background)];
+  }
+  
+  .btn-primary {
+    @apply btn bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] active:bg-[var(--primary-active)]
+           focus:ring-[var(--primary)] shadow-sm hover:shadow-md;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-[var(--background-surface)] text-[var(--foreground)] border border-[var(--border)]
+           hover:bg-[var(--background-surface-hover)] hover:border-[var(--border-hover)]
+           focus:ring-[var(--border)];
+  }
+  
+  .btn-ghost {
+    @apply btn text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:bg-[var(--background-surface)]
+           focus:ring-[var(--border)];
+  }
+  
+  .btn-danger {
+    @apply btn bg-[var(--error)] text-white hover:bg-[var(--error-hover)]
+           focus:ring-[var(--error)];
+  }
+  
+  /* Input component */
+  .input {
+    @apply w-full bg-[var(--background-elevated)] border border-[var(--border)] rounded-[var(--radius-md)]
+           px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)]
+           transition-all duration-200
+           hover:border-[var(--border-hover)]
+           focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-subtle)] focus:outline-none
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  /* Textarea component */
+  .textarea {
+    @apply input min-h-[100px] resize-y;
+  }
+  
+  /* Select component */
+  .select {
+    @apply input appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 40px;
+  }
+  
+  /* Badge component */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-full border;
+  }
+  
+  .badge-default {
+    @apply badge bg-[var(--background-subtle)] text-[var(--foreground-muted)] border-[var(--border)];
+  }
+  
+  .badge-success {
+    @apply badge bg-[var(--success-subtle)] text-[var(--success)] border-[var(--success)]/20;
+  }
+  
+  .badge-warning {
+    @apply badge bg-[var(--warning-subtle)] text-[var(--warning)] border-[var(--warning)]/20;
+  }
+  
+  .badge-error {
+    @apply badge bg-[var(--error-subtle)] text-[var(--error)] border-[var(--error)]/20;
+  }
+  
+  .badge-info {
+    @apply badge bg-[var(--info-subtle)] text-[var(--info)] border-[var(--info)]/20;
+  }
+  
+  .badge-primary {
+    @apply badge bg-[var(--primary-subtle)] text-[var(--primary)] border-[var(--primary)]/20;
+  }
+  
+  /* Table component */
+  .table-container {
+    @apply overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)];
+  }
+  
+  .table {
+    @apply w-full text-sm;
+  }
+  
+  .table th {
+    @apply bg-[var(--background-elevated)] text-[var(--foreground-subtle)] font-medium text-left px-4 py-3
+           border-b border-[var(--border)];
+  }
+  
+  .table td {
+    @apply px-4 py-3 border-b border-[var(--border-subtle)] text-[var(--foreground)];
+  }
+  
+  .table tbody tr {
+    @apply transition-colors;
+  }
+  
+  .table tbody tr:hover {
+    @apply bg-[var(--background-surface-hover)];
+  }
+  
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  
+  /* Status indicator */
+  .status {
+    @apply inline-flex items-center gap-1.5;
+  }
+  
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+  
+  /* Skeleton loading */
+  .skeleton {
+    @apply animate-pulse bg-[var(--background-surface-hover)] rounded-[var(--radius-md)];
+  }
+  
+  /* Tooltip */
+  .tooltip {
+    @apply invisible absolute z-50 px-2 py-1 text-xs font-medium text-white bg-[var(--background-elevated)]
+           rounded-[var(--radius-md)] shadow-lg opacity-0 transition-opacity whitespace-nowrap
+           border border-[var(--border)];
+  }
+  
+  .has-tooltip:hover .tooltip {
+    @apply visible opacity-100;
+  }
+  
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-[var(--primary)] to-[var(--info)] bg-clip-text text-transparent;
+  }
+  
+  /* Glow effects */
+  .glow {
+    @apply relative;
+  }
+  
+  .glow::before {
+    content: '';
+    @apply absolute inset-0 bg-[var(--primary-glow)] blur-3xl opacity-0 transition-opacity duration-300;
+  }
+  
+  .glow:hover::before {
+    @apply opacity-30;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Timing utilities */
+  .transition-colors-fast {
+    @apply transition-colors duration-150;
+  }
+  
+  .transition-transform-fast {
+    @apply transition-transform duration-150;
+  }
+  
+  /* Focus utilities */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[var(--background)];
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }

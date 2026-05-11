@@ -49,7 +49,7 @@ export async function analyzeForDoubts(
   findings: Finding[],
   mode: string
 ): Promise<DoubtAnalysis> {
-  logger.info(`Analyzing ${findings.length} findings for doubts`, { query: originalQuery });
+  logger.info('DoubtEngine', `Analyzing ${findings.length} findings for doubts`, { query: originalQuery });
 
   const doubts: Doubt[] = [];
   let overallConfidence = 0;
@@ -208,7 +208,8 @@ Return JSON: {"contradiction": true/false, "severity": "critical/high/medium/non
 function calculateSimilarity(str1: string, str2: string): number {
   const words1 = new Set(str1.toLowerCase().split(/\s+/));
   const words2 = new Set(str2.toLowerCase().split(/\s+/));
-  const intersection = new Set([...words1].filter(x => words2.has(x)));
+  const words1Array = Array.from(words1);
+  const intersection = new Set(words1Array.filter(x => words2.has(x)));
   return intersection.size / Math.max(words1.size, words2.size);
 }
 

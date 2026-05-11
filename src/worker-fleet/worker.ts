@@ -103,7 +103,7 @@ export class ResearchWorker {
 
   private async researchTopic(): Promise<Source[]> {
     const targetSources = this.getTargetSourceCount();
-    const searchResults = await this.performSearch(this.task.topic, targetSources * 2);
+    const searchResults = await this.performSearch(this.task.topic || this.task.query || '', targetSources * 2);
 
     for (const result of searchResults) {
       try {
@@ -168,12 +168,13 @@ export class ResearchWorker {
   }
 
   private getTargetSourceCount(): number {
+    const mode = this.task.mode as ResearchMode;
     const byMode: Record<ResearchMode, number> = {
       lite: 4,
       medium: 12,
       deep: 35,
     };
-    return byMode[this.task.mode] || byMode.medium;
+    return byMode[mode] ?? byMode.medium;
   }
 
   private async performSearch(query: string, maxResults: number): Promise<{ url: string; domain: string }[]> {

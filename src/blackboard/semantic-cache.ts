@@ -250,7 +250,7 @@ export class SemanticCacheService {
       // Limit cache size
       if (this.embeddingCache.size > 1000) {
         const firstKey = this.embeddingCache.keys().next().value;
-        this.embeddingCache.delete(firstKey);
+        this.embeddingCache.delete(firstKey as string);
       }
 
       return embedding;

@@ -73,7 +73,7 @@ export class TrustScorer {
     if (exactMatch) return exactMatch;
 
     // Check for TLD match
-    for (const [suffix, authority] of domainAuthorityDB) {
+    for (const [suffix, authority] of Array.from(domainAuthorityDB.entries())) {
       if (suffix.startsWith('.') && domain.endsWith(suffix)) {
         return authority;
       }

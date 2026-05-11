@@ -59,7 +59,7 @@ export class SecurityService {
     const suspiciousPatterns = [
       { pattern: /(you must|please|as an?|ignore|forget|reset)/g, weight: 0.2 },
       { pattern: /(new instructions|prompt injection|jailbreak)/g, weight: 0.5 },
-      { pattern: /\[.+\]|%7B.+\}|\x.+\x/g, weight: 0.4 },
+      { pattern: /\[.+\]|%7B.+\}/g, weight: 0.4 },
     ];
 
     for (const { pattern, weight } of suspiciousPatterns) {

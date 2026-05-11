@@ -3,13 +3,18 @@
  * For Blackboard, job queues, and caching
  */
 
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const isDev = process.env.NODE_ENV === 'development';
 
 export const redis = new Redis(redisUrl, {
-  retryStrategy: isDev ? () => null : (times) => Math.min(times * 50, 2000),
+  retryStrategy: (times: number) => {
+    if (isDev && times > 1) {
+      return null; // Stop retrying in dev after 1 attempt
+    }
+    return Math.min(times * 50, 2000);
+  },
   maxRetriesPerRequest: isDev ? 1 : 3,
   enableOfflineQueue: false,
 });
@@ -18,18 +23,11 @@ redis.on('connect', () => {
   console.log('Redis connected');
 });
 
-let redisErrorLogged = false;
-
-redis.on('error', (err) => {
+redis.on('error', (err: Error) => {
   const isConnectionError = (err as any).code === 'ECONNREFUSED';
-  if (isConnectionError) {
-    if (!redisErrorLogged) {
-      console.warn(`[Redis] Connection refused (${redisUrl}). Caching, queuing, and session memory are unavailable. Start Redis to restore.`);
-      redisErrorLogged = true;
-    }
-    return;
+  if (!isConnectionError) {
+    console.error('Redis error:', err);
   }
-  console.error('Redis error:', err);
 });
 
 // Blackboard operations
@@ -55,7 +53,7 @@ export const blackboard = {
 
   async getFacts(jobId: string): Promise<Record<string, unknown>[]> {
     const facts = await redis.lrange(`blackboard:${jobId}:facts`, 0, -1);
-    return facts.map(f => JSON.parse(f));
+    return (facts as string[]).map((f: string) => JSON.parse(f));
   },
 
   async getJobState(jobId: string): Promise<{ verifiedFacts: Record<string, unknown>[] } | null> {
@@ -84,7 +82,7 @@ export const blackboard = {
 
   async getContradictions(jobId: string): Promise<Record<string, unknown>[]> {
     const contradictions = await redis.lrange(`blackboard:${jobId}:contradictions`, 0, -1);
-    return contradictions.map(c => JSON.parse(c));
+    return (contradictions as string[]).map((c: string) => JSON.parse(c));
   },
 
   async logDomainAccess(jobId: string, domain: string): Promise<void> {
@@ -234,7 +232,7 @@ export const apiKeyTracking = {
     
     for (const [key, value] of Object.entries(stats)) {
       if (key.startsWith(today)) {
-        result[key] = parseInt(value, 10);
+        result[key] = parseInt(value as string, 10);
       }
     }
     

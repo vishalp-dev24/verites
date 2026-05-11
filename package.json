@@ -4,6 +4,10 @@
   "description": "Veritas — MCP-native research intelligence platform for AI agents",
   "main": "dist/app.js",
   "type": "module",
+  "workspaces": [
+    "sdk/javascript",
+    "dashboard"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias",
     "dev": "tsx watch src/app.ts",
@@ -14,7 +18,10 @@
     "db:studio": "prisma studio",
     "test": "vitest",
     "lint": "eslint src/**/*.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:sdk": "npm run build -w @veritas/sdk",
+    "build:dashboard": "npm run build -w @veritas/dashboard",
+    "dev:dashboard": "npm run dev -w @veritas/dashboard"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.600.0",

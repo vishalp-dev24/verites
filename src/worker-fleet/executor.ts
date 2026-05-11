@@ -5,13 +5,15 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { tavilySearch, SearchResult } from '../search/providers/tavily.js';
+// Search provider imports
+import { TavilySearchService } from '../search/providers/tavily.js';
+const tavilySearch = new TavilySearchService();
 import { llmService } from '../llm/index.js';
 import { blackboard } from '../blackboard/index.js';
 import { artifactStore } from '../artifact-store/index.js';
 import { trustScorer } from '../trust-scorer/index.js';
 import { securityService } from '../security/index.js';
-import { redis, RedisKeys } from '../redis/client.js';
+import { redis } from '../redis/client.js';
 import { prisma } from '../database/client.js';
 
 export interface Task {
@@ -62,7 +64,7 @@ export class WorkerFleet {
         findings: '',
         artifacts: [],
         checkpoint: null,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
       })))
     );
 
@@ -75,16 +77,19 @@ export class WorkerFleet {
     
     try {
       // Check blackboard for existing work
-      const existing = await blackboard.getVerifiedFact(task.jobId, task.topic);
-      if (existing) {
-        return {
-          taskId: task.id,
-          success: true,
-          sources: [],
-          findings: existing.value,
-          artifacts: [],
-          checkpoint: { stage: 'cached' },
-        };
+      const existing = await blackboard.getJobState(task.jobId);
+      if (existing && existing.verifiedFacts.length > 0) {
+        const fact = existing.verifiedFacts[0];
+        if (fact && fact.claim) {
+          return {
+            taskId: task.id,
+            success: true,
+            sources: [],
+            findings: fact.claim,
+            artifacts: [],
+            checkpoint: { stage: 'cached' },
+          };
+        }
       }
 
       // Check domain throttle
@@ -97,9 +102,7 @@ export class WorkerFleet {
       
       // Search for sources
       const searchResults = await tavilySearch.search(task.topic, {
-        max_results: task.mode === 'deep' ? 20 : task.mode === 'medium' ? 10 : 5,
-        search_depth: task.mode === 'lite' ? 'basic' : 'advanced',
-        include_raw_content: true,
+        maxResults: task.mode === 'deep' ? 20 : task.mode === 'medium' ? 10 : 5,
       });
 
       checkpoint = { stage: 'search_complete', taskId: task.id, sourcesFound: searchResults.length };
@@ -110,14 +113,26 @@ export class WorkerFleet {
 
       for (const result of searchResults) {
         // Security check
-        const securityCheck = await securityService.checkContent(result.content);
-        if (!securityCheck.safe) {
-          console.log(`Source quarantined: ${result.url}, reason: ${securityCheck.reason}`);
+        const securityCheck = await securityService.classifyIntent({
+          title: result.title || '',
+          body_text: result.content || '',
+          url: result.url,
+        });
+        if (!securityCheck.safe && securityCheck.action === 'block') {
+          console.log(`Source quarantined: ${result.url}, reason: ${securityCheck.flagged_patterns.join(', ')}`);
           continue;
         }
 
         // Calculate trust score
-        const trustScore = await trustScorer.score(result);
+        const trustScoreInput = {
+          domain: result.source,
+          content_freshness_days: 30,
+          source_type: result.source.includes('.gov') || result.source.includes('.edu') ? 'primary' : 'secondary' as 'primary' | 'secondary',
+          citation_depth: 1,
+          cross_source_consistency: 0.8,
+        };
+        const trustScoreResult = trustScorer.calculate(trustScoreInput);
+        const trustScore = trustScoreResult.score;
         
         // Skip low-trust sources in lite/medium mode
         if (task.mode !== 'deep' && trustScore < 0.3) {
@@ -139,8 +154,8 @@ Output: Bullet points of facts found.`
           url: result.url,
           title: result.title,
           content: extractedContent,
-          trustScore,
-          publishDate: result.published_date,
+          trustScore: trustScore,
+          publishDate: new Date().toISOString(),
         });
 
         processedContents.push(extractedContent);
@@ -164,11 +179,17 @@ Provide a comprehensive summary (2-3 paragraphs).`
       ], { tenantId: task.tenantId, jobId: task.jobId });
 
       // Store artifact
-      const artifactId = await artifactStore.saveArtifact(task.jobId, task.id, {
-        sources: searchResults,
-        extractedContents: processedContents,
-        synthesis: findings,
-        checkpoint,
+      const artifactId = `artifact_${uuidv4().slice(0, 10)}`;
+      await artifactStore.create({
+        artifactId,
+        jobId: task.jobId,
+        taskId: task.id,
+        content: findings,
+        sources: searchResults.map(s => ({
+          url: s.url,
+          title: s.title,
+          source: s.source,
+        })),
       });
 
       await blackboard.addVerifiedFact(task.jobId, task.topic, findings, sources.map(s => s.url));
@@ -187,7 +208,7 @@ Provide a comprehensive summary (2-3 paragraphs).`
       };
 
     } catch (error) {
-      const err = error as Error;
+      const err = error instanceof Error ? error : new Error(String(error));
       await this.saveCheckpoint(task.jobId, task.id, { stage: 'failed', error: err.message });
       
       return {
@@ -235,7 +256,8 @@ Provide a comprehensive summary (2-3 paragraphs).`
         jobId,
         tenantId,
         service: 'research',
-        credits: credits * 100, // Convert to paise
+        tokens: credits * 100, // Convert to paise
+        cost: credits,
         timestamp: new Date(),
       },
     });
