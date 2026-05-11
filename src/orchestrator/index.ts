@@ -9,8 +9,10 @@
  */
 
 export { orchestratorExecutor } from './executor.js';
-export {
-  analyzeForDoubts,
+export { analyzeForDoubts } from './doubt-engine.js';
+
+// Types must be exported with 'type' keyword for ESM compatibility
+export type {
   Doubt,
   DoubtAnalysis,
   Finding,

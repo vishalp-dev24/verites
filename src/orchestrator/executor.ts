@@ -11,8 +11,8 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { analyzeForDoubts, Doubt, Finding } from './doubt-engine.js';
-import { workerFleet, Task } from '../worker-fleet/executor.js';
+import { analyzeForDoubts, type Doubt, type Finding } from './doubt-engine.js';
+import { workerFleet, type Task } from '../worker-fleet/executor.js';
 import { blackboard } from '../blackboard/index.js';
 import { artifactStore } from '../artifact-store/index.js';
 import { llmService } from '../llm/index.js';
