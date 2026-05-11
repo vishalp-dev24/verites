@@ -1,176 +1,369 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import PageLayout from '@/components/layout/PageLayout';
-import StatCard from '@/components/dashboard/StatCard';
-import RecentJobs from '@/components/dashboard/RecentJobs';
-import { useQuery } from '@/lib/hooks/useQuery';
-import { getDashboardStats, getJobs, healthCheck } from '@/lib/api';
-import type { DashboardStats, ResearchJob, HealthStatus } from '@/types';
+import { useState } from 'react';
+import Link from 'next/link';
+import {
+  Home,
+  Search,
+  History,
+  Settings,
+  Key,
+  Activity,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  ChevronRight,
+  Zap,
+  TrendingUp,
+  Clock,
+  Database,
+  CreditCard,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-// Mock data for demo
-const mockStats: DashboardStats = {
-  total_jobs: 1247,
-  jobs_today: 23,
-  active_jobs: 3,
-  credits_remaining: 1240,
-  credits_used_this_month: 4560,
-  avg_research_time: 156,
-  queue_length: 2,
-  cache_hit_rate: 0.32,
-  active_sessions: 8,
-};
+// Mock data
+const stats = [
+  { label: 'Total Jobs', value: '1,247', change: '+12%', icon: Activity },
+  { label: 'Jobs Today', value: '23', change: '+5%', icon: Clock },
+  { label: 'Active Jobs', value: '3', change: '0', icon: Loader2 },
+  { label: 'Credits Remaining', value: '1,240', change: '-8%', icon: CreditCard },
+];
 
-const mockJobs: ResearchJob[] = [
+const jobs = [
   {
-    job_id: 'res_abc123xyz789',
-    session_id: 'sess_123',
+    id: 'res_abc123',
     query: 'Latest AI model developments and breakthroughs in 2026',
     mode: 'medium',
     status: 'complete',
-    confidence_score: 0.92,
-    credits_used: 25,
-    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    completed_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
-    sources_count: 12,
+    confidence: 0.92,
+    credits: 25,
+    time: '2 min ago',
+    sources: 12,
   },
   {
-    job_id: 'res_def456uvw012',
-    session_id: 'sess_124',
+    id: 'res_def456',
     query: 'EV market trends and projections for 2026-2028',
     mode: 'deep',
     status: 'complete',
-    confidence_score: 0.88,
-    credits_used: 87,
-    created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    sources_count: 45,
+    confidence: 0.88,
+    credits: 87,
+    time: '15 min ago',
+    sources: 45,
   },
   {
-    job_id: 'res_ghi789rst345',
-    session_id: 'sess_125',
+    id: 'res_ghi789',
     query: 'Cloud computing cost optimization strategies',
     mode: 'lite',
     status: 'complete',
-    confidence_score: 0.85,
-    credits_used: 5,
-    created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    sources_count: 4,
+    confidence: 0.85,
+    credits: 5,
+    time: '1 hour ago',
+    sources: 4,
   },
   {
-    job_id: 'res_jkl012pqr678',
-    session_id: 'sess_126',
+    id: 'res_jkl012',
     query: 'Blockchain voting systems security analysis',
     mode: 'medium',
     status: 'failed',
-    confidence_score: null,
-    credits_used: 3,
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    error: 'Source validation failed',
+    confidence: null,
+    credits: 3,
+    time: '2 hours ago',
+    sources: 0,
   },
   {
-    job_id: 'res_mno345stu901',
-    session_id: 'sess_127',
+    id: 'res_mno345',
     query: 'Quantum computing investment landscape',
     mode: 'deep',
     status: 'processing',
-    confidence_score: null,
-    credits_used: 12,
-    created_at: new Date(Date.now() - 30 * 1000).toISOString(),
+    confidence: null,
+    credits: 12,
+    time: '30 sec ago',
+    sources: 0,
   },
 ];
 
-const mockHealth: HealthStatus = {
-  status: 'healthy',
-  version: '1.0.0',
-  timestamp: new Date().toISOString(),
-  uptime: 86400 * 7,
+const health = {
+  status: 'healthy' as const,
+  uptime: '7d 12h 34m',
   services: {
-    database: 'connected',
-    redis: 'connected',
-    search: 'connected',
+    database: 'connected' as const,
+    redis: 'connected' as const,
+    search: 'connected' as const,
   },
 };
 
-export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>(mockStats);
-  const [jobs, setJobs] = useState<ResearchJob[]>(mockJobs);
-  const [health, setHealth] = useState<HealthStatus>(mockHealth);
-  const [loading, setLoading] = useState(true);
+const navItems = [
+  { label: 'Dashboard', href: '/', icon: Home },
+  { label: 'Research', href: '/research', icon: Search },
+  { label: 'Jobs', href: '/jobs', icon: History, badge: 3 },
+  { label: 'API Keys', href: '/api-keys', icon: Key },
+  { label: 'Settings', href: '/settings', icon: Settings },
+];
 
-  useEffect(() => {
-    // Simulate API loading
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+const modeStyles = {
+  lite: 'bg-[var(--mode-lite-bg)] text-[var(--mode-lite)]',
+  medium: 'bg-[var(--mode-medium-bg)] text-[var(--mode-medium)]',
+  deep: 'bg-[var(--mode-deep-bg)] text-[var(--mode-deep)]',
+};
+
+const statusStyles = {
+  complete: { icon: CheckCircle2, className: 'text-[var(--success)]' },
+  failed: { icon: XCircle, className: 'text-[var(--error)]' },
+  processing: { icon: Loader2, className: 'text-[var(--info)] animate-spin' },
+};
+
+export default function DashboardPage() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <PageLayout
-      title="Dashboard"
-      description="Overview of your research activity and platform health"
-      status={health.status}
-    >
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          title="Credits Remaining"
-          value={stats.credits_remaining}
-          subtitle={`${Math.round(stats.credits_remaining / 50)} projected days`}
-          trend={{ value: 12, isPositive: true }}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-          color="primary"
-          loading={loading}
-        />
-        
-        <StatCard
-          title="Total Research Jobs"
-          value={stats.total_jobs}
-          subtitle={`${stats.jobs_today} jobs today`}
-          trend={{ value: 8, isPositive: true }}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12m-3.75 0v-1.063c0-1.45.333-2.85.937-4.143M12 10.97a2.971 2.971 0 001.792-2.666 2.969 2.969 0 01-1.792-2.666 2.971 2.971 0 00-1.792 2.666 2.97 2.97 0 011.792 2.666z" />
-            </svg>
-          }
-          color="info"
-          loading={loading}
-        />
-        
-        <StatCard
-          title="Active Sessions"
-          value={stats.active_sessions}
-          subtitle="Memory-enabled"
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          }
-          color="success"
-          loading={loading}
-        />
-        
-        <StatCard
-          title="Cache Hit Rate"
-          value={`${(stats.cache_hit_rate * 100).toFixed(0)}%`}
-          subtitle={`Saved ${Math.round(stats.total_jobs * stats.cache_hit_rate * 2)} credits`}
-          trend={{ value: 5, isPositive: true }}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          }
-          color="violet"
-          loading={loading}
-        />
-      </div>
+    <div className="flex h-screen bg-[var(--background)]">
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          'flex-shrink-0 flex flex-col bg-[var(--background-elevated)] border-r border-[var(--border)]',
+          sidebarOpen ? 'w-64' : 'w-16'
+        )}
+      >
+        {/* Logo */}
+        <div className="h-16 flex items-center px-4 border-b border-[var(--border)]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[var(--foreground)] flex items-center justify-center flex-shrink-0">
+              <span className="text-[var(--background)] font-bold text-sm">V</span>
+            </div>
+            {sidebarOpen && (
+              <span className="font-semibold text-[var(--foreground)]">Veritas</span>
+            )}
+          </div>
+        </div>
 
-      {/* Recent Jobs */}
-      <RecentJobs jobs={jobs} loading={loading} />
-    </PageLayout>
+        {/* Navigation */}
+        <nav className="flex-1 py-4 px-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = item.href === '/';
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                  isActive
+                    ? 'text-[var(--foreground)] bg-[var(--background-surface)]'
+                    : 'text-[var(--foreground-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--background-hover)]'
+                )}
+              >
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                {sidebarOpen && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && (
+                      <span className="px-2 py-0.5 text-xs bg-[var(--accent-subtle)] text-[var(--accent)] rounded-full">
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Toggle */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-4 text-[var(--foreground-tertiary)] hover:text-[var(--foreground)] border-t border-[var(--border)]"
+        >
+          <ChevronRight
+            className={cn('w-5 h-5 transition-transform', sidebarOpen && 'rotate-180')}
+          />
+        </button>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto">
+        {/* Header */}
+        <header className="h-16 flex items-center justify-between px-6 border-b border-[var(--border)] bg-[var(--background)] sticky top-0 z-10">
+          <div>
+            <h1 className="text-base font-semibold text-[var(--foreground)]">Dashboard</h1>
+            <p className="text-xs text-[var(--foreground-tertiary)]">
+              Overview of your research activity
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className={cn(
+                  'w-2 h-2 rounded-full',
+                  health.status === 'healthy' ? 'bg-[var(--success)]' : 'bg-[var(--error)]'
+                )}
+              />
+              <span className="text-[var(--foreground-secondary)]">
+                {health.status === 'healthy' ? 'All systems operational' : 'Issues detected'}
+              </span>
+            </div>
+            <Link
+              href="/research"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-[var(--foreground)] text-[var(--background)] text-sm font-medium hover:bg-[var(--foreground-secondary)] transition-colors"
+            >
+              <Search className="w-4 h-4" />
+              New Research
+            </Link>
+          </div>
+        </header>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+              const isPositive = stat.change.startsWith('+');
+              return (
+                <div
+                  key={stat.label}
+                  className="p-4 rounded-lg bg-[var(--background-elevated)] border border-[var(--border)] hover:border-[var(--border-strong)] transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wider text-[var(--foreground-tertiary)]">
+                      {stat.label}
+                    </span>
+                    <Icon className="w-4 h-4 text-[var(--foreground-tertiary)]" />
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <span className="text-2xl font-semibold text-[var(--foreground)] tabular-nums">
+                      {stat.value}
+                    </span>
+                    <span
+                      className={cn(
+                        'text-xs font-medium',
+                        isPositive ? 'text-[var(--success)]' : 'text-[var(--error)]'
+                      )}
+                    >
+                      {stat.change}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Recent Jobs */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-[var(--foreground)]">
+                Recent Research Jobs
+              </h2>
+              <Link
+                href="/jobs"
+                className="text-xs text-[var(--foreground-secondary)] hover:text-[var(--foreground)]"
+              >
+                View all
+              </Link>
+            </div>
+
+            <div className="rounded-lg border border-[var(--border)] overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[var(--background-elevated)] border-b border-[var(--border)]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--foreground-tertiary)]">Query</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--foreground-tertiary)]">Mode</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--foreground-tertiary)]">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--foreground-tertiary)]">Credits</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-[var(--foreground-tertiary)]">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => {
+                    const StatusIcon = statusStyles[job.status].icon;
+                    return (
+                      <tr
+                        key={job.id}
+                        className="border-b border-[var(--border)] hover:bg-[var(--background-hover)] transition-colors"
+                      >
+                        <td className="px-4 py-3 max-w-md">
+                          <p className="font-medium text-[var(--foreground-primary)] truncate">
+                            {job.query}
+                          </p>
+                          <p className="text-xs text-[var(--foreground-tertiary)]">
+                            {job.id} • {job.sources} sources
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={cn(
+                              'inline-flex px-2 py-1 text-xs font-medium rounded',
+                              modeStyles[job.mode]
+                            )}
+                          >
+                            {job.mode}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <StatusIcon
+                              className={cn('w-4 h-4', statusStyles[job.status].className)}
+                            />
+                            <span className="capitalize text-[var(--foreground-secondary)]">
+                              {job.status}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-[var(--foreground-primary)]">
+                            {job.credits}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-[var(--foreground-tertiary)]">
+                          {job.time}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Quick Stats Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-lg bg-[var(--background-elevated)] border border-[var(--border)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[var(--accent-subtle)] flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--foreground-tertiary)]">Cache Hit Rate</p>
+                  <p className="text-lg font-semibold text-[var(--foreground)]">32%</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-[var(--background-elevated)] border border-[var(--border)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[var(--success-bg)] flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-[var(--success)]" />
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--foreground-tertiary)]">Avg Research Time</p>
+                  <p className="text-lg font-semibold text-[var(--foreground)]">156s</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-[var(--background-elevated)] border border-[var(--border)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[var(--mode-medium-bg)] flex items-center justify-center">
+                  <Database className="w-5 h-5 text-[var(--mode-medium)]" />
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--foreground-tertiary)]">Active Sessions</p>
+                  <p className="text-lg font-semibold text-[var(--foreground)]">8</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
