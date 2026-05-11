@@ -14,8 +14,9 @@ The easiest way to run Veritas locally is with Docker Compose. This checkout inc
 Since `make` isn't available on Windows, use these PowerShell commands:
 
 ```powershell
-# 1. Clone/pull the repo
-git pull origin feat/veritas-rebrand
+# 1. Clone the repo
+git clone https://github.com/vishalp-dev24/verites.git
+cd verites
 
 # 2. Copy environment file
 copy .env.example .env

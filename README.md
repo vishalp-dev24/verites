@@ -1,8 +1,6 @@
 # Veritas
 
-**MCP-native research intelligence platform for AI agents**
-
-> Deep web research, concisely delivered. Multi-source, trust-scored, always fresh.
+MCP research backend for AI agents. Web search, trust scoring, session memory, REST APIs, SDKs, and dashboard.
 
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
@@ -12,35 +10,36 @@
 
 ---
 
-## 🎯 Features
+## Features
 
 ### Core Capabilities
 
-- 🔍 **Multi-Source Research** - Combines AI search (Tavily, Exa fallback) with browser-assisted extraction
-- 🧠 **Intelligent Orchestration** - Blackboard pattern with doubt engine for quality control
-- ⚡ **Adaptive Modes** - Lite, medium, and deep research modes
-- 🛡️ **Trust Scoring** - Source authority evaluation with contradiction detection
-- 🔄 **Session Memory** - Contextual research across multiple queries
-- 💰 **Credit-Based Billing** - Transparent token-based pricing
-- 📊 **Real-Time Dashboard** - Monitor jobs, usage, and session history
+- **Multi-source research** - Combines AI search with browser-assisted extraction.
+- **Orchestration** - Uses a blackboard pattern and doubt engine for quality control.
+- **Research modes** - Supports lite, medium, and deep runs.
+- **Trust scoring** - Scores source authority and checks contradictions.
+- **Session memory** - Carries context across related research queries.
+- **Credit billing** - Tracks usage with token-based pricing.
+- **Dashboard** - Shows jobs, usage, API keys, and system status.
 
 ### AI Agent Integration
 
-- 🤖 **MCP Server** - Native Model Context Protocol support for Claude Code
-- 🔑 **API-First** - RESTful API with API key authentication
-- 📦 **Multi-Modal Output** - JSON, briefings, and custom schemas
-- 🔗 **Webhooks** - Async job completion notifications
+- **MCP server** - Native Model Context Protocol support.
+- **REST API** - API key authentication for application access.
+- **SDKs** - JavaScript and Python clients.
+- **Structured output** - JSON, briefings, and custom schemas.
+- **Webhooks** - Async job completion notifications.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Local Development Setup (Docker)
 
 ```bash
 # Clone and start
-git clone https://github.com/your-org/veritas.git
-cd veritas
+git clone https://github.com/vishalp-dev24/verites.git
+cd verites
 
 # Configure environment
 cp .env.example .env
@@ -67,11 +66,11 @@ curl http://localhost:3000/health
 
 ```
 
-**[Full Setup Guide](./SETUP.md)** → Prerequisites, manual setup, troubleshooting
+**[Full Setup Guide](./SETUP.md)** - Prerequisites, manual setup, troubleshooting
 
 ---
 
-## 📖 API Usage
+## API Usage
 
 ### 1. Create an API Key
 
@@ -153,7 +152,7 @@ Research status values exposed by the public API include `queued`, `planning`, `
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -171,11 +170,11 @@ Research status values exposed by the public API include `queued`, `planning`, `
    └───────────┘  └────────────┘  └──────────┘
 ```
 
-**[Architecture Deep Dive →](./ARCHITECTURE.md)**
+**[Architecture Deep Dive](./ARCHITECTURE.md)**
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### Minimal (Docker)
 - Docker 24.0+
@@ -189,7 +188,7 @@ Research status values exposed by the public API include `queued`, `planning`, `
 
 ---
 
-## 🛠️ Development
+## Development
 
 ```bash
 # Install dependencies
@@ -228,7 +227,7 @@ npm run dev:dashboard
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 veritas/
@@ -256,7 +255,7 @@ veritas/
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -280,11 +279,11 @@ ALLOWED_ORIGINS=http://localhost:3001
 # See .env.example for all options
 ```
 
-**[Full Configuration Guide →](./SETUP.md#environment-variables)**
+**[Full Configuration Guide](./SETUP.md#environment-variables)**
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Unit tests
@@ -299,22 +298,22 @@ curl http://localhost:3000/health
 
 ---
 
-## 📈 Roadmap
+## Roadmap
 
-### Phase 1 - Core Platform ✅
+### Phase 1 - Core Platform
 - [x] RESTful API with auth
 - [x] PostgreSQL database with Prisma
 - [x] Redis blackboard cache
 - [x] Multi-provider LLM support
 - [x] Trust scoring system
 
-### Phase 2 - Scale & SaaS 🚧
+### Phase 2 - Scale and SaaS
 - [ ] WebSocket real-time updates
 - [ ] Billing dashboard
 - [ ] Public SDKs (Python, Go)
 - [ ] Custom worker fleet scaling
 
-### Phase 3 - Intelligence 🔮
+### Phase 3 - Intelligence
 - [ ] Research agent personas
 - [ ] Multi-modal outputs (images, charts)
 - [ ] Collaborative research sessions
@@ -322,7 +321,7 @@ curl http://localhost:3000/health
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -332,18 +331,17 @@ curl http://localhost:3000/health
 
 ---
 
-## 📄 License
+## License
 
-MIT © [Veritas Contributors](https://github.com/your-org/veritas)
+MIT (c) [Vishal P](https://github.com/vishalp-dev24)
 
 ---
 
-## 🆘 Support
+## Support
 
-- 📖 [Documentation](./SETUP.md)
-- 🏗️ [Architecture](./ARCHITECTURE.md)
-- 🐛 [Issues](https://github.com/your-org/veritas/issues)
-- 💬 [Discussions](https://github.com/your-org/veritas/discussions)
+- [Documentation](./SETUP.md)
+- [Architecture](./ARCHITECTURE.md)
+- [Issues](https://github.com/vishalp-dev24/verites/issues)
 
 ---
 
@@ -357,8 +355,6 @@ MIT © [Veritas Contributors](https://github.com/your-org/veritas)
 
 <div align="center">
 
-**[⬆ Back to Top](#veritas)**
-
-Made with ❤️ for AI agents
+**[Back to Top](#veritas)**
 
 </div>
