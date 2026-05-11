@@ -9,10 +9,21 @@ import * as crypto from 'crypto';
 import { prisma } from '../database/client.js';
 import { semanticCache } from '../redis/client.js';
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || '',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
-});
+let razorpay: Razorpay | null = null;
+
+function getRazorpay(): Razorpay {
+  if (!razorpay) {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!keyId || !keySecret) {
+      throw new Error('Razorpay keys not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+    }
+
+    razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+  }
+  return razorpay;
+}
 
 interface BillingEvent {
   jobId: string;
@@ -236,7 +247,7 @@ export class BillingService {
     // Create or get customer
     let customerId = tenant.razorpayCustomerId;
     if (!customerId) {
-      const customer = await razorpay.customers.create({
+      const customer = await getRazorpay().customers.create({
         name: name || tenant.name,
         email: tenant.email,
         contact: contact,
@@ -257,7 +268,7 @@ export class BillingService {
     if (!plan) throw new Error('Invalid tier');
 
     // Create subscription
-    const subscription = await razorpay.subscriptions.create({
+    const subscription = await getRazorpay().subscriptions.create({
       plan_id: plan.planId,
       customer_id: customerId,
       total_count: 12, // Monthly for 1 year
@@ -281,7 +292,7 @@ export class BillingService {
     });
 
     // Create payment link for first payment
-    const paymentLink = await razorpay.paymentLink.create({
+    const paymentLink = await getRazorpay().paymentLink.create({
       amount: plan.amount,
       currency: 'INR',
       description: `VerifAI ${tier} Plan Subscription`,
@@ -366,7 +377,7 @@ export class BillingService {
     if (!tenant) throw new Error('Tenant not found');
 
     // Create order
-    const order = await razorpay.orders.create({
+    const order = await getRazorpay().orders.create({
       amount: amountRs * 100, // Convert to paise
       currency: 'INR',
       receipt: `credits_${tenantId}_${Date.now()}`,
@@ -375,7 +386,7 @@ export class BillingService {
     });
 
     // Create payment link
-    const paymentLink = await razorpay.paymentLink.create({
+    const paymentLink = await getRazorpay().paymentLink.create({
       amount: amountRs * 100,
       currency: 'INR',
       description: `${credits} Research Credits - Instant Top-up`,

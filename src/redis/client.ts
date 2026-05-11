@@ -6,20 +6,29 @@
 import Redis from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const isDev = process.env.NODE_ENV === 'development';
 
 export const redis = new Redis(redisUrl, {
-  retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  maxRetriesPerRequest: 3,
+  retryStrategy: isDev ? () => null : (times) => Math.min(times * 50, 2000),
+  maxRetriesPerRequest: isDev ? 1 : 3,
+  enableOfflineQueue: false,
 });
 
 redis.on('connect', () => {
   console.log('Redis connected');
 });
 
+let redisErrorLogged = false;
+
 redis.on('error', (err) => {
+  const isConnectionError = (err as any).code === 'ECONNREFUSED';
+  if (isConnectionError) {
+    if (!redisErrorLogged) {
+      console.warn(`[Redis] Connection refused (${redisUrl}). Caching, queuing, and session memory are unavailable. Start Redis to restore.`);
+      redisErrorLogged = true;
+    }
+    return;
+  }
   console.error('Redis error:', err);
 });
 
