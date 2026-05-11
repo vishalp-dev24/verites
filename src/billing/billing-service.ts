@@ -7,10 +7,22 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { prisma } from '../database/client.js';
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || '',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
-});
+// Lazy initialization - only create when keys are available
+let razorpay: Razorpay | null = null;
+
+function getRazorpay(): Razorpay {
+  if (!razorpay) {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    
+    if (!keyId || !keySecret) {
+      throw new Error('Razorpay keys not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+    }
+    
+    razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+  }
+  return razorpay;
+}
 
 // Plan configurations for Razorpay
 const PLAN_CONFIGS: Record<string, { amount: number; credits: number; interval: string }> = {
@@ -128,7 +140,7 @@ export class BillingService {
     let customerId = tenant.razorpayCustomerId;
 
     if (!customerId) {
-      const customer = await razorpay.customers.create({
+      const customer = await getRazorpay().customers.create({
         email,
         notes: {
           tenantId,
@@ -143,11 +155,11 @@ export class BillingService {
     }
 
     // Create plan if not exists (in production, you'd pre-create plans)
-    const plan = await razorpay.plans.create({
+    const plan = await getRazorpay().plans.create({
       period: planConfig.interval === 'monthly' ? 'monthly' : 'yearly',
       interval: 1,
       item: {
-        name: `VerifAI ${tier.charAt(0).toUpperCase() + tier.slice(1)} ${isYearly ? 'Annual' : ''} Plan`,
+        name: `Veritas ${tier.charAt(0).toUpperCase() + tier.slice(1)} ${isYearly ? 'Annual' : ''} Plan`,
         amount: planConfig.amount,
         currency: 'INR',
         description: `${planConfig.credits} research credits per month`,
@@ -159,7 +171,7 @@ export class BillingService {
     });
 
     // Create subscription
-    const subscription = await razorpay.subscriptions.create({
+    const subscription = await getRazorpay().subscriptions.create({
       plan_id: plan.id,
       customer_id: customerId,
       total_count: planConfig.interval === 'monthly' ? 12 : 1, // 12 months for monthly, 1 year for yearly
@@ -180,7 +192,7 @@ export class BillingService {
     });
 
     // Return payment link for first payment
-    const paymentLink = await razorpay.paymentLink.create({
+    const paymentLink = await getRazorpay().paymentLink.create({
       amount: planConfig.amount,
       currency: 'INR',
       accept_partial: false,
@@ -281,7 +293,7 @@ export class BillingService {
 
     if (!tenant) throw new Error('Tenant not found');
 
-    const order = await razorpay.orders.create({
+    const order = await getRazorpay().orders.create({
       amount: amount * 100, // Convert to paise
       currency: 'INR',
       receipt: `credits_${tenantId}_${Date.now()}`,
@@ -304,7 +316,7 @@ export class BillingService {
    */
   async getGSTInvoice(tenantId: string, invoiceId: string) {
     try {
-      const invoice = await razorpay.invoices.fetch(invoiceId);
+      const invoice = await getRazorpay().invoices.fetch(invoiceId);
       return invoice;
     } catch (error) {
       console.error('[Billing] Failed to fetch invoice:', error);
