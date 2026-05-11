@@ -1,7 +1,7 @@
 {
-  "name": "research-platform",
+  "name": "veritas",
   "version": "1.0.0",
-  "description": "Research Agent Infrastructure Platform",
+  "description": "Veritas — MCP-native research intelligence platform for AI agents",
   "main": "dist/app.js",
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1045.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@prisma/client": "^5.10.0",
     "axios": "^1.6.0",
@@ -29,7 +30,7 @@
     "morgan": "^1.10.0",
     "openai": "^4.25.0",
     "puppeteer": "^24.43.0",
-    "stripe": "^14.17.0",
+    "razorpay": "^2.9.6",
     "uuid": "^9.0.0",
     "zod": "^3.22.0"
   },

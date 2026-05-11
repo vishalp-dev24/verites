@@ -1,6 +1,7 @@
 
 /**
- * Research Platform - Main Application
+ * Veritas - MCP-native research intelligence platform
+ * Main Application Entry Point
  */
 
 import express from 'express';
@@ -78,7 +79,7 @@ app.use((err: any, req: any, res: any, next: any) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Research Platform API running on port ${PORT}`);
+  console.log(`Veritas API running on port ${PORT}`);
 });
 
 // Graceful shutdown

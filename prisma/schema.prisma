@@ -16,14 +16,16 @@ model ResearchJob {
   query             String
   mode              String
   status            String
-  outputSchema      Json     @map("output_schema")
+  outputSchema      Json?    @map("output_schema")
   costControls      Json?    @map("cost_controls")
+  errorMessage      String?  @map("error_message")
   
   // Results
   confidenceScore   Float?   @map("confidence_score")
   qualityAchieved   Boolean? @map("quality_achieved")
   budgetReached     Boolean? @map("budget_reached")
   data              Json?
+  response          Json?
   sources           Json?
   contradictions    Json?
   followUpQueries   Json?    @map("follow_up_queries")
@@ -34,8 +36,10 @@ model ResearchJob {
   
   // Metadata
   processingTimeMs  Int?     @map("processing_time_ms")
+  processingTime    Int?     @map("processing_time")
   creditsUsed       Int?     @map("credits_used")
   cacheHit          Boolean? @map("cache_hit")
+  iterations        Int?     @default(1)
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
   completedAt       DateTime? @map("completed_at")
@@ -154,9 +158,9 @@ model Tenant {
   email             String
   tier              String   @default("free") // free, developer, pro, enterprise
   
-  // Billing
-  stripeCustomerId  String?  @map("stripe_customer_id")
-  stripeSubscriptionId String? @map("stripe_subscription_id")
+  // Billing - Razorpay (India)
+  razorpayCustomerId     String?  @map("razorpay_customer_id")
+  razorpaySubscriptionId String?  @map("razorpay_subscription_id")
   
   // Credits
   creditsBalance    Int      @default(0) @map("credits_balance")

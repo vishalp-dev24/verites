@@ -1,15 +1,17 @@
 /**
  * Billing Service
- * Stripe + Flexprice integration
+ * Razorpay integration for Indian market
  * Credit-based billing with tier management
  */
 
-import Stripe from 'stripe';
+import Razorpay from 'razorpay';
+import * as crypto from 'crypto';
 import { prisma } from '../database/client.js';
 import { semanticCache } from '../redis/client.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-12-18.acacia',
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || '',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
 });
 
 interface BillingEvent {
@@ -33,6 +35,20 @@ const TIER_LIMITS: TierLimits = {
   developer: { requests: 50000, workers: 10 },
   pro: { requests: 200000, workers: 10 },
   enterprise: { requests: Infinity, workers: Infinity },
+};
+
+// Razorpay plan configs (in paise)
+const RAZORPAY_PLANS: Record<string, { planId: string; amount: number; credits: number }> = {
+  developer: {
+    planId: process.env.RAZORPAY_DEVELOPER_PLAN_ID || 'developer_monthly',
+    amount: 2900, // ₹29 (~₹999 INR)
+    credits: 50000,
+  },
+  pro: {
+    planId: process.env.RAZORPAY_PRO_PLAN_ID || 'pro_monthly',
+    amount: 9900, // ₹99 (~₹2,999 INR)
+    credits: 200000,
+  },
 };
 
 const MODE_COSTS: Record<string, number> = {
@@ -184,10 +200,10 @@ export class BillingService {
 
     // Alert thresholds
     if (percentRemaining <= 0.1) {
-      console.log(`[Billing] ALERT: ${tenantId} credit balance at ${percentRemaining * 100}%`);
-      // TODO: Send email/notification
+      console.log(`[Billing] ALERT: ${tenantId} credit balance at ${Math.round(percentRemaining * 100)}%`);
+      // TODO: Send email/notification via SES
     } else if (percentRemaining <= 0.25) {
-      console.log(`[Billing] WARNING: ${tenantId} credit balance at ${percentRemaining * 100}%`);
+      console.log(`[Billing] WARNING: ${tenantId} credit balance at ${Math.round(percentRemaining * 100)}%`);
     }
   }
 
@@ -197,8 +213,8 @@ export class BillingService {
   private getMaxCreditsForTier(tier: string): number {
     const monthlyCredits: Record<string, number> = {
       free: 0,
-      developer: 1000, // ~$10 worth
-      pro: 5000, // ~$50 worth
+      developer: 1000, // ~₹10 worth
+      pro: 5000, // ~₹50 worth
       enterprise: 50000,
     };
 
@@ -206,104 +222,174 @@ export class BillingService {
   }
 
   /**
-   * Create Stripe subscription
+   * Create Razorpay subscription
    */
   async createSubscription(
     tenantId: string,
     tier: string,
-    paymentMethodId: string
-  ): Promise<string> {
+    name: string,
+    contact: string
+  ): Promise<{ subscriptionId: string; shortUrl: string }> {
     const tenant = await prisma.tenant.findUnique({ where: { tenantId } });
     if (!tenant) throw new Error('Tenant not found');
 
     // Create or get customer
-    let customerId = tenant.stripeCustomerId;
+    let customerId = tenant.razorpayCustomerId;
     if (!customerId) {
-      const customer = await stripe.customers.create({
+      const customer = await razorpay.customers.create({
+        name: name || tenant.name,
         email: tenant.email,
+        contact: contact,
+        notes: {
+          tenantId,
+        },
       });
       customerId = customer.id;
 
       await prisma.tenant.update({
         where: { tenantId },
-        data: { stripeCustomerId: customerId },
+        data: { razorpayCustomerId: customerId },
       });
     }
 
-    // Attach payment method
-    await stripe.paymentMethods.attach(paymentMethodId, {
-      customer: customerId,
-    });
+    // Get plan details
+    const plan = RAZORPAY_PLANS[tier];
+    if (!plan) throw new Error('Invalid tier');
 
     // Create subscription
-    const priceIds: Record<string, string> = {
-      developer: process.env.STRIPE_DEVELOPER_PRICE_ID || '',
-      pro: process.env.STRIPE_PRO_PRICE_ID || '',
-    };
-
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: priceIds[tier] }],
-      default_payment_method: paymentMethodId,
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: plan.planId,
+      customer_id: customerId,
+      total_count: 12, // Monthly for 1 year
+      notify_info: {
+        email: true,
+        sms: false,
+      },
+      notes: {
+        tenantId,
+        tier,
+        credits: plan.credits,
+      },
     });
 
     await prisma.tenant.update({
       where: { tenantId },
       data: {
-        stripeSubscriptionId: subscription.id,
+        razorpaySubscriptionId: subscription.id,
         tier,
       },
     });
 
-    return subscription.id;
+    // Create payment link for first payment
+    const paymentLink = await razorpay.paymentLink.create({
+      amount: plan.amount,
+      currency: 'INR',
+      description: `VerifAI ${tier} Plan Subscription`,
+      customer: {
+        email: tenant.email,
+        contact: contact,
+        name: name || tenant.name,
+      },
+      notify: {
+        email: true,
+      },
+      notes: {
+        tenantId,
+        tier,
+        subscriptionId: subscription.id,
+      },
+      callback_url: `${process.env.DASHBOARD_URL || 'http://localhost:3000'}/billing/success`,
+      callback_method: 'get',
+    });
+
+    return { subscriptionId: subscription.id, shortUrl: paymentLink.short_url };
   }
 
   /**
-   * Handle Stripe webhook
+   * Handle Razorpay webhook for subscription payments
    */
-  async handleWebhook(event: Stripe.Event): Promise<void> {
-    switch (event.type) {
-      case 'invoice.payment_succeeded':
-        await this.handlePaymentSucceeded(event.data.object as Stripe.Invoice);
+  async handleWebhook(payload: unknown, signature: string): Promise<void> {
+    // Verify webhook signature
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(JSON.stringify(payload))
+      .digest('hex');
+
+    if (expectedSignature !== signature) {
+      throw new Error('Invalid webhook signature');
+    }
+
+    const event = payload as { event: string; payload?: { subscription?: { entity?: { notes?: { tenantId?: string; tier?: string; credits?: string } } } } };
+
+    switch (event.event) {
+      case 'subscription.charged':
+        await this.handleRazorpayPayment(payload);
         break;
-      case 'invoice.payment_failed':
-        await this.handlePaymentFailed(event.data.object as Stripe.Invoice);
-        break;
-      case 'customer.subscription.deleted':
-        await this.handleSubscriptionCancelled(event.data.object as Stripe.Subscription);
+      case 'subscription.cancelled':
+        await this.handleRazorpayCancellation(payload);
         break;
     }
   }
 
-  private async handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
-    // Add monthly credits
-    const customerId = invoice.customer as string;
-    const tenant = await prisma.tenant.findFirst({
-      where: { stripeCustomerId: customerId },
-    });
-
-    if (tenant) {
-      const credits = tenant.tier === 'developer' ? 1000 : tenant.tier === 'pro' ? 5000 : 0;
-      await this.addCredits(tenant.tenantId, credits);
+  private async handleRazorpayPayment(payload: unknown): Promise<void> {
+    const data = payload as { payload?: { subscription?: { entity?: { notes?: { tenantId?: string; tier?: string; credits?: string } } } } };
+    const notes = data.payload?.subscription?.entity?.notes;
+    if (notes && notes.tenantId && notes.tier) {
+      const plan = RAZORPAY_PLANS[notes.tier];
+      if (plan) {
+        await this.addCredits(notes.tenantId, plan.credits);
+      }
     }
   }
 
-  private async handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-    // Notify tenant
-    console.log('[Billing] Payment failed:', invoice.id);
-  }
-
-  private async handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {
-    const tenant = await prisma.tenant.findFirst({
-      where: { stripeSubscriptionId: subscription.id },
-    });
-
-    if (tenant) {
-      await prisma.tenant.update({
-        where: { tenantId: tenant.tenantId },
+  private async handleRazorpayCancellation(payload: unknown): Promise<void> {
+    const data = payload as { payload?: { subscription?: { entity?: { id?: string } } } };
+    const subscriptionId = data.payload?.subscription?.entity?.id;
+    if (subscriptionId) {
+      await prisma.tenant.updateMany({
+        where: { razorpaySubscriptionId: subscriptionId },
         data: { tier: 'free' },
       });
     }
+  }
+
+  /**
+   * Generate UPI payment link for quick top-ups
+   */
+  async createUPIPayment(
+    tenantId: string, 
+    amountRs: number, 
+    credits: number
+  ): Promise<{ shortUrl: string; orderId: string }> {
+    const tenant = await prisma.tenant.findUnique({ where: { tenantId } });
+    if (!tenant) throw new Error('Tenant not found');
+
+    // Create order
+    const order = await razorpay.orders.create({
+      amount: amountRs * 100, // Convert to paise
+      currency: 'INR',
+      receipt: `credits_${tenantId}_${Date.now()}`,
+      notes: { tenantId, credits: credits.toString(), type: 'credit_topup' },
+      type: 'promotion', // for internal wallet credits
+    });
+
+    // Create payment link
+    const paymentLink = await razorpay.paymentLink.create({
+      amount: amountRs * 100,
+      currency: 'INR',
+      description: `${credits} Research Credits - Instant Top-up`,
+      customer: {
+        email: tenant.email,
+        name: tenant.name,
+      },
+      notify: { email: true },
+      notes: { tenantId, credits: credits.toString(), orderId: order.id },
+      callback_url: `${process.env.DASHBOARD_URL || 'http://localhost:3000'}/billing/topup-success`,
+      callback_method: 'get',
+    });
+
+    return { shortUrl: paymentLink.short_url, orderId: order.id };
   }
 
   /**

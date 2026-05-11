@@ -1,6 +1,7 @@
 
 /**
- * Research Service - Production Implementation
+ * Veritas Research Service
+ * Core orchestration for multi-source verified research
  * Orchestrates planning, workers, orchestrator loop, and formatting
  */
 

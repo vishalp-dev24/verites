@@ -1,6 +1,6 @@
 
 /**
- * Orchestrator Executor - Complete Doubt Loop Implementation
+ * Veritas Orchestrator Executor
  * 
  * The orchestrator:
  * 1. Receives initial worker results

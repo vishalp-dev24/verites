@@ -156,6 +156,14 @@ export class ArtifactStore {
   }
 
   /**
+   * Mark artifact as used (noop for tracking purposes)
+   */
+  async markUsed(artifactId: string): Promise<void> {
+    // Artifact is already stored, just log usage if needed
+    console.log(`[ArtifactStore] Artifact ${artifactId} marked as used`);
+  }
+
+  /**
    * Delete artifact
    */
   async delete(artifactId: string): Promise<void> {

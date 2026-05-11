@@ -155,7 +155,7 @@ ${source.content_excerpt}` },
       }
     }
 
-    return contradinctions;
+    return contradictions;
   }
 
   /**

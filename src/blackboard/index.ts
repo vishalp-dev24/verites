@@ -256,3 +256,6 @@ export class BlackboardService {
 export function createBlackboard(jobId: string, tenantId: string): BlackboardService {
   return new BlackboardService(jobId, tenantId);
 }
+
+// Re-export blackboard from redis client for compatibility
+export { blackboard } from '../redis/client.js';

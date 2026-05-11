@@ -49,6 +49,23 @@ export const blackboard = {
     return facts.map(f => JSON.parse(f));
   },
 
+  async getJobState(jobId: string): Promise<{ verifiedFacts: Record<string, unknown>[] } | null> {
+    const facts = await this.getFacts(jobId);
+    return { verifiedFacts: facts };
+  },
+
+  async addVerifiedFact(jobId: string, _taskId: string, findings: string, sources: string[]): Promise<void> {
+    const fact = {
+      id: `fact_${Date.now()}`,
+      value: findings,
+      sources,
+      confidence: 0.8,
+      verified: true,
+      timestamp: new Date().toISOString(),
+    };
+    await this.appendFact(jobId, fact);
+  },
+
   async logContradiction(
     jobId: string,
     contradiction: Record<string, unknown>

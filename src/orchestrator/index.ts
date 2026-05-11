@@ -1,6 +1,6 @@
 
 /**
- * Orchestrator Module
+ * Veritas Orchestrator Module
  * 
  * Exports:
  * - orchestratorExecutor: Main doubt loop executor

@@ -1,11 +1,13 @@
-# Research Agent Infrastructure Platform
+# Veritas
 
-AI-powered research intelligence layer that autonomous agents connect to for verified, multi-source research via the Model Context Protocol (MCP).
+**MCP-native research intelligence platform for AI agents**
+
+Veritas is the research infrastructure that verifies sources, detects contradictions, and delivers structured intelligence that agents can use immediately — zero parsing required.
 
 ## Quick Start
 
 ```bash
-cd ~/research-platform
+cd ~/veritas
 
 # Install dependencies
 npm install

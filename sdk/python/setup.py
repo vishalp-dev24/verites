@@ -1,11 +1,11 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="researchplatform",
+    name="veritas",
     version="1.0.0",
-    description="Research Agent Infrastructure Platform - Python SDK",
-    author="Research Platform",
-    author_email="support@researchplatform.com",
+    description="Veritas — MCP-native research intelligence platform Python SDK",
+    author="Veritas",
+    author_email="support@veritas.research",
     packages=find_packages(),
     install_requires=[
         "requests>=2.25.0",
