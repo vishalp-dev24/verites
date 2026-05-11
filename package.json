@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.600.0",
     "@aws-sdk/client-s3": "^3.1045.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@prisma/client": "^5.10.0",

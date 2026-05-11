@@ -31,6 +31,42 @@ deadcode:     npx knip --no-exports
 shell:        shellcheck scripts/*.sh 2>/dev/null || echo "No shell scripts"
 ```
 
+## LLM Providers
+
+**Primary**: OpenAI (gpt-4o-mini, gpt-4o, gpt-3.5-turbo)
+**Backup**: AWS Bedrock (Claude, Llama, Mistral)
+
+**Supported Bedrock Models:**
+- anthropic.claude-3-5-sonnet-20241022-v2:0
+- anthropic.claude-3-5-haiku-20241022-v1:0
+- anthropic.claude-3-haiku-20240307-v1:0
+- meta.llama3-1-70b-instruct-v1:0
+- meta.llama3-1-8b-instruct-v1:0
+- mistral.mistral-large-2402-v1:0
+
+**Environment Variables:**
+```bash
+OPENAI_API_KEY=sk-...
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=us-east-1
+```
+
+**Usage:**
+```typescript
+// Auto-select (uses OpenAI by default, falls back to Bedrock)
+await llmService.generate(messages, { provider: 'auto' });
+
+// Force Bedrock
+await llmService.generate(messages, { 
+  provider: 'bedrock',
+  model: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+});
+
+// Task-optimized model selection
+const model = llmService.selectModelForTask('planning', 'bedrock');
+```
+
 ## Project
 
 Name: Veritas
