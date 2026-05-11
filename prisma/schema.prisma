@@ -19,7 +19,7 @@ model ResearchJob {
   outputSchema      Json?    @map("output_schema")
   costControls      Json?    @map("cost_controls")
   errorMessage      String?  @map("error_message")
-  
+
   // Results
   confidenceScore   Float?   @map("confidence_score")
   qualityAchieved   Boolean? @map("quality_achieved")
@@ -33,24 +33,30 @@ model ResearchJob {
   workerFailures    Json?    @map("worker_failures")
   trace             Json?
   securityEvents    Json?    @map("security_events")
-  
+
   // Metadata
   processingTimeMs  Int?     @map("processing_time_ms")
   processingTime    Int?     @map("processing_time")
   creditsUsed       Int?     @map("credits_used")
+  creditsReserved   Int      @default(0) @map("credits_reserved")
+  billingFinalizedAt DateTime? @map("billing_finalized_at")
+  reservationReleasedAt DateTime? @map("reservation_released_at")
   cacheHit          Boolean? @map("cache_hit")
   iterations        Int?     @default(1)
+  workerLeaseId     String?  @map("worker_lease_id")
+  workerLeaseExpiresAt DateTime? @map("worker_lease_expires_at")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
   completedAt       DateTime? @map("completed_at")
-  
+
   // Relations
   tasks             Task[]
   artifacts         Artifact[]
-  
+
   @@index([tenantId])
   @@index([sessionId])
   @@index([status])
+  @@index([workerLeaseExpiresAt])
   @@index([createdAt])
   @@map("research_jobs")
 }
@@ -65,17 +71,17 @@ model Task {
   mustNotOverlapWith Json[]  @map("must_not_overlap_with")
   mode              String
   status            String
-  
+
   // Checkpoint
   checkpointData    Json?    @map("checkpoint_data")
-  
+
   // Relations
   job               ResearchJob @relation(fields: [jobId], references: [jobId], onDelete: Cascade)
   artifact          Artifact?
-  
+
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-  
+
   @@index([jobId])
   @@index([status])
   @@map("tasks")
@@ -91,11 +97,11 @@ model Artifact {
   sources           Json
   rawHtml           String?  @map("raw_html") @db.Text
   extractedAt       DateTime @map("extracted_at")
-  
+
   // Relations
   job               ResearchJob @relation(fields: [jobId], references: [jobId], onDelete: Cascade)
   task              Task @relation(fields: [taskId], references: [taskId], onDelete: Cascade)
-  
+
   @@index([jobId])
   @@map("artifacts")
 }
@@ -103,19 +109,20 @@ model Artifact {
 // Session memory for research continuity
 model Session {
   id                String   @id @default(cuid())
-  sessionId         String   @unique @map("session_id")
+  sessionId         String   @map("session_id")
   tenantId          String   @map("tenant_id")
-  
+
   // Memory contents
   topicsResearched  Json     @map("topics_researched")
   keyConclusions    Json     @map("key_conclusions")
   followUpQueries   Json     @map("follow_up_queries")
-  
+
   // TTL
   expiresAt         DateTime @map("expires_at")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-  
+
+  @@unique([tenantId, sessionId])
   @@index([tenantId])
   @@index([expiresAt])
   @@map("sessions")
@@ -128,22 +135,23 @@ model ApiKey {
   tenantId          String   @map("tenant_id")
   keyHash           String   @map("key_hash")
   name              String?
-  
+  permissions       String[] @default(["read", "write"])
+
   // Behavior fingerprint (for abuse detection)
   modeDistribution  Json?    @map("mode_distribution")
   timePattern       Json?    @map("time_pattern")
   queryEntropy      Float?   @map("query_entropy")
   costCurve         Json?    @map("cost_curve")
   baselineEstablished Boolean @default(false) @map("baseline_established")
-  
+
   // Status
   isActive          Boolean  @default(true) @map("is_active")
   suspendedAt       DateTime? @map("suspended_at")
   suspensionReason  String?  @map("suspension_reason")
-  
+
   createdAt         DateTime @default(now()) @map("created_at")
   lastUsedAt        DateTime? @map("last_used_at")
-  
+
   @@index([tenantId])
   @@index([keyHash])
   @@index([isActive])
@@ -157,25 +165,25 @@ model Tenant {
   name              String
   email             String
   tier              String   @default("free") // free, developer, pro, enterprise
-  
+
   // Billing - Razorpay (India)
   razorpayCustomerId     String?  @map("razorpay_customer_id")
   razorpaySubscriptionId String?  @map("razorpay_subscription_id")
-  
+
   // Credits
-  creditsBalance    Int      @default(0) @map("credits_balance")
+  creditsBalance    Int      @default(250) @map("credits_balance")
   creditsUsed       Int      @default(0) @map("credits_used")
-  
+
   // Limits
   maxRequestsPerMonth Int    @default(3000) @map("max_requests_per_month")
   maxWorkers        Int      @default(10) @map("max_workers")
-  
+
   // Status
   isActive          Boolean  @default(true) @map("is_active")
-  
+
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-  
+
   @@index([tier])
   @@index([isActive])
   @@map("tenants")
@@ -187,15 +195,16 @@ model BillingEvent {
   eventId           String   @unique @map("event_id")
   tenantId          String   @map("tenant_id")
   jobId             String?  @map("job_id")
-  
+
   // Usage
   mode              String
   workersUsed       Int      @map("workers_used")
   iterations        Int
   creditsUsed       Int      @map("credits_used")
-  
+
   createdAt         DateTime @default(now()) @map("created_at")
-  
+
+  @@unique([jobId])
   @@index([tenantId])
   @@index([createdAt])
   @@map("billing_events")
@@ -209,11 +218,11 @@ model CacheEntry {
   mode              String
   result            Json
   sources           Json
-  
+
   // TTL
   expiresAt         DateTime @map("expires_at")
   createdAt         DateTime @default(now()) @map("created_at")
-  
+
   @@index([fingerprint])
   @@index([expiresAt])
   @@map("cache_entries")
@@ -228,7 +237,7 @@ model Metering {
   tokens            Int
   cost              Int
   timestamp         DateTime @default(now())
-  
+
   @@index([tenantId])
   @@index([jobId])
   @@index([timestamp])

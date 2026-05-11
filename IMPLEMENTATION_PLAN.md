@@ -75,7 +75,7 @@ type PageContent = {
 
 class BrowserAutomation {
   constructor(private proxy?: string) {}
-  
+
   async fetchPage(url: string): Promise<PageContent> {
     // Playwright implementation with:
     // - Stealth mode (user-agent rotation)
@@ -134,7 +134,7 @@ class CircuitBreaker {
   private state: 'closed' | 'open' | 'half-open';
   private failureCount: number;
   private lastFailureTime: Date;
-  
+
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     // Implementation with threshold-based state machine
   }
@@ -170,7 +170,7 @@ logger.info('Research completed', {
 ### Task 4.3: Request Timeouts
 Add to all external calls:
 - LLM API: 30s timeout
-- Search API: 10s timeout  
+- Search API: 10s timeout
 - Browser fetch: 20s timeout
 - Database: 5s timeout
 
@@ -187,7 +187,7 @@ export const api = {
   getStats: () => fetch(`${API_BASE}/api/dashboard/stats`),
   getJobs: (page: number) => fetch(`${API_BASE}/api/jobs?page=${page}`),
   getCredits: () => fetch(`${API_BASE}/api/credits`),
-  createResearch: (query: string) => 
+  createResearch: (query: string) =>
     fetch(`${API_BASE}/api/research`, { method: 'POST', body: JSON.stringify({ query }) }),
 };
 ```
@@ -221,7 +221,7 @@ Update each component to use API:
 class LLMProvider {
   private providers: LLMClient[];
   private circuitBreakers: Map<string, CircuitBreaker>;
-  
+
   async generate(prompt: string, options: GenerateOptions): Promise<string> {
     // Try OpenAI first, failover to Anthropic, then local model
   }

@@ -113,10 +113,9 @@ The central coordinator for research jobs.
 **Modes Supported:**
 | Mode | Description | Use Case |
 |------|-------------|----------|
-| `fast` | Single-pass, 1-3 sources | Quick facts, simple questions |
-| `standard` | Multi-source synthesis | Balanced depth vs speed |
+| `lite` | Single-pass, 1-3 sources | Quick facts, simple questions |
+| `medium` | Multi-source synthesis | Balanced depth vs speed |
 | `deep` | Exhaustive research | Academic, market research |
-| `cheapest` | Cache-first, minimal LLM | High-volume, low-cost |
 
 ### 3. Orchestrator (`src/orchestrator/`)
 
@@ -181,7 +180,7 @@ interface Blackboard {
 | Provider | Engine | Fallback |
 |----------|--------|----------|
 | Tavily | AI-optimized | Primary |
-| Serper | Google Search | Fallback |
+| Exa | Neural search | Fallback |
 | DuckDuckGo | Privacy-first | Fallback |
 
 ### 7. LLM Service (`src/llm/`)
@@ -229,7 +228,7 @@ User → API:
   POST /v1/research
   {
     query: "...",
-    mode: "standard",
+    mode: "medium",
     output_schema: {...}
   }
 
@@ -249,8 +248,9 @@ Orchestrator → WorkerFleet:
 API → User:
   {
     job_id: "...",
-    status: "running",
-    estimated_seconds: 45
+    status: "queued",
+    estimated_time: 45,
+    credits_reserved: 250
   }
 ```
 
@@ -263,7 +263,7 @@ WorkerFleet → Blackboard:
 WorkerFleet → SearchService:
   search(query)
 
-SearchService → Tavily/Serper:
+SearchService → Tavily/Exa:
   executeSearch()
 
 WorkerFleet → LLMService:
@@ -295,7 +295,7 @@ API → Database:
 
 API → User:
   {
-    status: "completed",
+    status: "success",
     confidence_score: 0.87,
     sources: [...],
     data: {...}

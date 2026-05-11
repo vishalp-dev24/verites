@@ -34,10 +34,10 @@ export function useQuery<T>(
   const fetch = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const result = await queryFn();
-      
+
       if (result.error) {
         setError(result.error);
         onError?.(result.error);
@@ -99,10 +99,10 @@ export function useMutation<T, V = unknown>(
   const mutate = useCallback(async (variables: V) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const result = await mutationFn(variables);
-      
+
       if (result.error) {
         setError(result.error);
         onError?.(result.error, variables);

@@ -9,8 +9,8 @@ interface SkeletonProps {
   height?: string;
 }
 
-const Skeleton = ({ 
-  className, 
+const Skeleton = ({
+  className,
   variant = 'text',
   width,
   height,

@@ -10,13 +10,13 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ 
-    className, 
+  ({
+    className,
     variant = 'default',
     hover = false,
     padding = 'md',
     children,
-    ...props 
+    ...props
   }, ref) => {
     const variants = {
       default: 'card',

@@ -119,12 +119,20 @@ export interface ResearchRequest {
   custom_instructions?: string;
 }
 
-export interface OutputSchema {
-  sections?: string[];
-  format?: 'markdown' | 'json' | 'structured';
-  max_length?: number;
-  include_sources?: boolean;
-}
+export type OutputSchema =
+  | {
+      type: 'object';
+      properties?: Record<string, OutputSchema>;
+      required?: string[];
+    }
+  | {
+      type: 'array';
+      items: OutputSchema;
+    }
+  | {
+      type: 'string' | 'number' | 'integer' | 'boolean' | 'null';
+    }
+  | Record<string, unknown>;
 
 // Research Response
 export interface ResearchResponse {
@@ -144,6 +152,7 @@ export interface HealthStatus {
     database: 'connected' | 'disconnected';
     redis: 'connected' | 'disconnected';
     search: 'connected' | 'disconnected';
+    llm: 'connected' | 'disconnected';
   };
 }
 

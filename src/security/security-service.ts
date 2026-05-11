@@ -4,8 +4,6 @@
  * Content validation and threat detection
  */
 
-import axios from 'axios';
-
 interface SecurityCheck {
   safe: boolean;
   reason?: string;
@@ -14,11 +12,11 @@ interface SecurityCheck {
 
 export class SecurityService {
   // Layer 1: Content extraction (already done in worker)
-  
+
   // Layer 2: Intent Classifier
   async checkContent(content: string): Promise<SecurityCheck> {
     const riskScore = this.calculateRiskScore(content);
-    
+
     if (riskScore > 0.7) {
       return {
         safe: false,
@@ -54,7 +52,7 @@ export class SecurityService {
   private calculateRiskScore(content: string): number {
     let score = 0;
     const lowerContent = content.toLowerCase();
-    
+
     // Check for instruction-like language
     const suspiciousPatterns = [
       { pattern: /(you must|please|as an?|ignore|forget|reset)/g, weight: 0.2 },
@@ -75,7 +73,7 @@ export class SecurityService {
   // Layer 4: Output validation
   validateOutput(data: any): SecurityCheck {
     const jsonString = JSON.stringify(data);
-    
+
     // Check for injected instructions in output
     const suspiciousPatterns = [
       /ignore previous/i,

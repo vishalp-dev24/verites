@@ -37,7 +37,7 @@ class Logger {
 
   constructor(options: Partial<LoggerOptions> = {}) {
     this.options = {
-      service: options.service || 'research-platform',
+      service: options.service || 'veritas',
       minLevel: options.minLevel || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
       enableConsole: options.enableConsole ?? true,
       ...options,
@@ -157,7 +157,7 @@ class Logger {
 
 // Global logger instance
 export const logger = new Logger({
-  service: 'research-platform',
+  service: 'veritas',
   minLevel: (process.env.LOG_LEVEL as LogLevel) || 'info',
 });
 
@@ -166,9 +166,9 @@ export const logger = new Logger({
  */
 export function createComponentLogger(component: string): Logger {
   return new Logger({
-    service: 'research-platform',
+    service: 'veritas',
     minLevel: (process.env.LOG_LEVEL as LogLevel) || 'info',
-  }).child({ service: `research-platform:${component}` });
+  }).child({ service: `veritas:${component}` });
 }
 
 /**

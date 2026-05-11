@@ -1,6 +1,6 @@
 /**
  * Tavily Search Provider
- * 
+ *
  * Uses Tavily API for intelligent web search with AI-powered results
  */
 
@@ -19,7 +19,7 @@ export interface SearchResult {
 
 export class TavilySearchService {
   private apiKey: string;
-  
+
   constructor() {
     this.apiKey = TAVILY_API_KEY;
   }
@@ -53,7 +53,7 @@ export class TavilySearchService {
     );
 
     const data = response.data;
-    
+
     if (!data.results || !Array.isArray(data.results)) {
       throw new Error('Invalid Tavily response format');
     }

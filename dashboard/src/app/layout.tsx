@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Veritas — Research Intelligence Platform',
+  title: 'Veritas - Research Intelligence Platform',
   description: 'AI-Powered Research Intelligence Platform for deep, accurate insights',
 };
 

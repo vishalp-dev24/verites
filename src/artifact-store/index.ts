@@ -1,7 +1,7 @@
 /**
  * Artifact Store
  * Stores full research output per task
- * 
+ *
  * Orchestrator only loads artifacts on demand
  * This keeps orchestrator context under 2,000 tokens regardless of depth
  */
@@ -34,11 +34,18 @@ export class ArtifactStore {
    */
   async create(input: ArtifactCreateInput): Promise<void> {
     // Store in database
-    await prisma.artifact.create({
-      data: {
+    await prisma.artifact.upsert({
+      where: { taskId: input.taskId },
+      create: {
         artifactId: input.artifactId,
         jobId: input.jobId,
         taskId: input.taskId,
+        content: input.content,
+        sources: input.sources as any,
+        rawHtml: input.rawHtml,
+        extractedAt: new Date(),
+      },
+      update: {
         content: input.content,
         sources: input.sources as any,
         rawHtml: input.rawHtml,
@@ -131,7 +138,7 @@ export class ArtifactStore {
    */
   async loadFullContent(artifactId: string): Promise<Artifact | null> {
     const artifact = await this.get(artifactId);
-    
+
     if (!artifact) return null;
 
     // If stored in S3, fetch from there

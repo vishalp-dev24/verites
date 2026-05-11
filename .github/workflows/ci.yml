@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feat/veritas-rebrand
+
+jobs:
+  build:
+    name: Install, Build, Test, Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_ci_password
+          POSTGRES_DB: veritas_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veritas -d veritas_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      API_URL: "http://127.0.0.1:3000"
+      DASHBOARD_API_KEY: "ci-dashboard-api-key"
+      DASHBOARD_USERNAME: "ci-dashboard"
+      DASHBOARD_PASSWORD: "ci-dashboard-password"
+      NEXT_PUBLIC_API_URL: "http://127.0.0.1:3000"
+      DATABASE_URL: "postgresql://veritas:veritas_ci_password@127.0.0.1:5432/veritas_ci"
+      REDIS_URL: "redis://127.0.0.1:6379"
+      ADMIN_API_TOKEN: "ci-admin-token"
+      ALLOWED_ORIGINS: "http://127.0.0.1:3000"
+      OPENAI_API_KEY: "ci-openai-placeholder"
+      TAVILY_API_KEY: "ci-tavily-placeholder"
+      DB_PASSWORD: "veritas_ci_password"
+      REDIS_PASSWORD: "veritas_ci_redis_password"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test -- --run
+
+      - name: Workspace tests
+        run: npm run --workspaces --if-present test
+
+      - name: Python SDK tests
+        run: python -m unittest discover -s sdk/python/tests
+
+      - name: Workspace lint
+        run: npm run --workspaces --if-present lint
+
+      - name: Root build
+        run: npm run build
+
+      - name: Dashboard build
+        run: npm run build:dashboard
+
+      - name: SDK build
+        run: npm run build:sdk
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Validate Docker compose config
+        run: docker compose -f docker-compose.yml config
+
+      - name: Build Docker images
+        run: |
+          docker build -t veritas-api-ci -f Dockerfile .
+          docker build -t veritas-worker-ci -f Dockerfile.worker .
+
+      - name: Smoke test API and worker images
+        run: |
+          cleanup() {
+            docker rm -f veritas-api-ci veritas-worker-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d --name veritas-api-ci --network host \
+            -e NODE_ENV=production \
+            -e PORT=3000 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e REDIS_URL="$REDIS_URL" \
+            -e ADMIN_API_TOKEN="$ADMIN_API_TOKEN" \
+            -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+            -e TAVILY_API_KEY="$TAVILY_API_KEY" \
+            veritas-api-ci
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs veritas-api-ci
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker run -d --name veritas-worker-ci --network host \
+            -e NODE_ENV=production \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e REDIS_URL="$REDIS_URL" \
+            -e ADMIN_API_TOKEN="$ADMIN_API_TOKEN" \
+            -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+            -e TAVILY_API_KEY="$TAVILY_API_KEY" \
+            veritas-worker-ci
+
+          sleep 5
+          docker ps --filter name=veritas-worker-ci --format '{{.Names}}' | grep -q '^veritas-worker-ci$'
+
+      - name: Audit vulnerabilities
+        run: npm audit --audit-level moderate

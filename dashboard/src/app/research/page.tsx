@@ -5,7 +5,8 @@ import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
 import { ModeBadge } from '@/components/ui/StatusBadge';
-import { getModeDescription, getEstimatedTime, cn } from '@/lib/utils';
+import { createResearch } from '@/lib/api';
+import { getEstimatedTime, cn } from '@/lib/utils';
 import type { ResearchMode } from '@/types';
 
 interface ResearchModeCard {
@@ -21,21 +22,21 @@ const researchModes: ResearchModeCard[] = [
     mode: 'lite',
     title: 'Lite',
     description: 'Quick overview with key insights. Best for rapid fact-checking and summaries.',
-    credits: 5,
+    credits: 13,
     time: '30 sec',
   },
   {
     mode: 'medium',
     title: 'Medium',
     description: 'Balanced depth with quality sources. Ideal for most research needs.',
-    credits: 25,
+    credits: 38,
     time: '2-3 min',
   },
   {
     mode: 'deep',
     title: 'Deep',
     description: 'Comprehensive analysis with extensive sources. For critical decisions.',
-    credits: 87,
+    credits: 125,
     time: '5-8 min',
   },
 ];
@@ -44,22 +45,34 @@ export default function ResearchPage() {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<ResearchMode>('medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [result, setResult] = useState<{ jobId: string; estimatedTime: number } | null>(null);
+  const [result, setResult] = useState<{ jobId: string; estimatedTime: number; status: string } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
 
     setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setResult({
-      jobId: `res_${Math.random().toString(36).substr(2, 9)}`,
-      estimatedTime: mode === 'deep' ? 480 : mode === 'medium' ? 180 : 30,
+    setSubmitError(null);
+
+    const response = await createResearch({
+      query: query.trim(),
+      mode,
     });
-    
+
+    if (response.error || !response.data) {
+      setResult(null);
+      setSubmitError(response.error || 'Research request failed');
+      setIsSubmitting(false);
+      return;
+    }
+
+    setResult({
+      jobId: response.data.job_id,
+      estimatedTime: response.data.estimated_time,
+      status: response.data.status,
+    });
+
     setIsSubmitting(false);
   };
 
@@ -115,19 +128,19 @@ export default function ResearchPage() {
                         </svg>
                       </div>
                     )}
-                    
+
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <ModeBadge mode={m.mode} />
                       </div>
-                      
+
                       <p className={cn(
                         'text-sm font-medium',
                         mode === m.mode ? 'text-[var(--foreground)]' : 'text-[var(--foreground-muted)]'
                       )}>
                         {m.description}
                       </p>
-                      
+
                       <div className="flex items-center gap-4 pt-2 text-xs text-[var(--foreground-subtle)]">
                         <span className="flex items-center gap-1">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -156,9 +169,9 @@ export default function ResearchPage() {
                 </span>{' '}
                 will be deducted
               </div>
-              <Button 
-                type="submit" 
-                variant="primary" 
+              <Button
+                type="submit"
+                variant="primary"
                 size="lg"
                 loading={isSubmitting}
                 disabled={!query.trim() || isSubmitting}
@@ -166,6 +179,12 @@ export default function ResearchPage() {
                 {isSubmitting ? 'Starting Research...' : 'Start Research'}
               </Button>
             </div>
+
+            {submitError && (
+              <div className="rounded-lg border border-[var(--error)]/30 bg-[var(--error-bg)] p-3 text-sm text-[var(--error)]">
+                {submitError}
+              </div>
+            )}
           </form>
         </div>
 
@@ -181,7 +200,7 @@ export default function ResearchPage() {
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-[var(--foreground)]">Research Started</h3>
                 <p className="text-sm text-[var(--foreground-muted)] mt-1">
-                  Your research is now being processed. Estimated completion time: {getEstimatedTime(mode)}.
+                  Status: {result.status}. Estimated completion time: {result.estimatedTime > 0 ? `${result.estimatedTime}s` : getEstimatedTime(mode)}.
                 </p>
                 <div className="mt-4 p-3 bg-[var(--background-elevated)] rounded-lg border border-[var(--border)]">
                   <div className="flex items-center justify-between">

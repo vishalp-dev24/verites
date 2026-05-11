@@ -39,22 +39,22 @@ export class Formatter {
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
-        return this.createNullResponse('empty_response');
+        throw new Error('Formatter returned an empty response');
       }
 
       const parsed = JSON.parse(content);
-      
+
       // Validate against schema
       const validation = this.validateAgainstSchema(parsed, schema);
       if (!validation.valid) {
         console.warn('[Formatter] Schema validation failed:', validation.errors);
-        return this.createNullResponse('schema_mismatch', validation.errors);
+        throw new Error(`Formatted output failed schema validation: ${validation.errors.join('; ')}`);
       }
 
-      return parsed;
+      return validation.data;
     } catch (error) {
       console.error('[Formatter] Formatting error:', error);
-      return this.createNullResponse('formatting_error');
+      throw error instanceof Error ? error : new Error('Formatter failed');
     }
   }
 
@@ -64,14 +64,12 @@ export class Formatter {
   private validateAgainstSchema(
     data: unknown,
     schema: Record<string, unknown>
-  ): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-
+  ): { valid: boolean; errors: string[]; data?: unknown } {
     // Simple schema validation (would use Zod in production)
     try {
       const zodSchema = this.convertToZod(schema);
-      zodSchema.parse(data);
-      return { valid: true, errors: [] };
+      const parsed = zodSchema.parse(data);
+      return { valid: true, errors: [], data: parsed };
     } catch (error) {
       if (error instanceof z.ZodError) {
         return {
@@ -86,23 +84,46 @@ export class Formatter {
   /**
    * Convert JSON schema to Zod schema
    */
-  private convertToZod(schema: Record<string, unknown>): z.ZodType {
-    const type = schema.type as string;
+  private convertToZod(schema: unknown): z.ZodType {
+    if (typeof schema === 'string') {
+      return this.primitiveToZod(schema);
+    }
+
+    if (Array.isArray(schema)) {
+      if (schema.length !== 1) {
+        throw new Error('Array shorthand schemas must contain exactly one item schema');
+      }
+      return z.array(this.convertToZod(schema[0]));
+    }
+
+    const record = this.asRecord(schema);
+    const type = typeof record.type === 'string' ? record.type : undefined;
+
+    if (!type) {
+      const shape: Record<string, z.ZodType> = {};
+      for (const [key, prop] of Object.entries(record)) {
+        shape[key] = this.convertToZod(prop);
+      }
+      return z.object(shape).strict();
+    }
 
     switch (type) {
       case 'object':
-        const properties = schema.properties as Record<string, unknown>;
+        const properties = this.asRecord(record.properties);
         const shape: Record<string, z.ZodType> = {};
-        
+
         for (const [key, prop] of Object.entries(properties)) {
-          shape[key] = this.convertToZod(prop as Record<string, unknown>);
+          shape[key] = this.convertToZod(prop);
         }
-        
-        return z.object(shape);
+
+        const objectSchema = z.object(shape);
+        return record.additionalProperties === true ? objectSchema.passthrough() : objectSchema.strict();
 
       case 'array':
-        const items = schema.items as Record<string, unknown>;
-        return z.array(this.convertToZod(items));
+        if (!('items' in record)) {
+          throw new Error('Array schemas must define items');
+        }
+        return z.array(this.convertToZod(record.items));
 
       case 'string':
         return z.string();
@@ -120,20 +141,29 @@ export class Formatter {
         return z.null();
 
       default:
-        return z.any();
+        throw new Error(`Unsupported schema type: ${type}`);
     }
   }
 
-  /**
-   * Create null response with reason
-   */
-  private createNullResponse(reason: string, details?: string[]): unknown {
-    return {
-      error: null,
-      reason,
-      details: details || [],
-      timestamp: new Date().toISOString(),
-    };
+  private primitiveToZod(type: string): z.ZodType {
+    switch (type) {
+      case 'string':
+        return z.string();
+      case 'number':
+        return z.number();
+      case 'integer':
+        return z.number().int();
+      case 'boolean':
+        return z.boolean();
+      case 'null':
+        return z.null();
+      default:
+        throw new Error(`Unsupported schema shorthand: ${type}`);
+    }
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
   }
 
   /**

@@ -54,23 +54,23 @@ const Toast = ({ id, message, type, onDismiss, duration = 5000 }: ToastProps) =>
   };
 
   const styles: Record<ToastType, { bg: string; border: string; icon: string }> = {
-    success: { 
-      bg: 'bg-[var(--success-subtle)]', 
+    success: {
+      bg: 'bg-[var(--success-subtle)]',
       border: 'border-[var(--success)]/20',
       icon: 'text-[var(--success)]'
     },
-    error: { 
-      bg: 'bg-[var(--error-subtle)]', 
+    error: {
+      bg: 'bg-[var(--error-subtle)]',
       border: 'border-[var(--error)]/20',
       icon: 'text-[var(--error)]'
     },
-    warning: { 
-      bg: 'bg-[var(--warning-subtle)]', 
+    warning: {
+      bg: 'bg-[var(--warning-subtle)]',
       border: 'border-[var(--warning)]/20',
       icon: 'text-[var(--warning)]'
     },
-    info: { 
-      bg: 'bg-[var(--info-subtle)]', 
+    info: {
+      bg: 'bg-[var(--info-subtle)]',
       border: 'border-[var(--info)]/20',
       icon: 'text-[var(--info)]'
     },

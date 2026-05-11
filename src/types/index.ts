@@ -1,18 +1,19 @@
 /**
- * Core types for Research Platform
+ * Core types for Veritas
  * Defines all request/response schemas and internal types
  */
 
 export type ResearchMode = 'lite' | 'medium' | 'deep';
 
 export type ResearchStatus =
+  | 'queued'
   | 'planning'
-  | 'dispatching'
-  | 'researching'
-  | 'verifying'
-  | 'synthesizing'
-  | 'complete'
+  | 'processing'
+  | 'finalizing'
+  | 'success'
+  | 'partial'
   | 'failed'
+  | 'rejected'
   | 'cancelled';
 
 export type WorkerStatus =
@@ -29,21 +30,13 @@ export interface ResearchRequest {
   session_id: string;
   output_schema: Record<string, unknown>;
   cost_controls?: CostControls;
-  language?: string;
-  date_range_days?: number;
-  domain_whitelist?: string[];
-  domain_blacklist?: string[];
-  cache?: boolean;
-  batch?: string[];
-  batch_delivery?: 'wait_for_all' | 'streaming';
 }
 
 export interface CostControls {
-  max_budget_paise: number;
-  fallback_mode: ResearchMode;
-  on_budget_hit: 'return_best_available' | 'fail_clean' | 'notify_and_pause';
-  quality_threshold: number;
-  max_iterations: number;
+  max_budget_paise?: number;
+  fallback_mode?: ResearchMode;
+  quality_threshold?: number;
+  max_iterations?: number;
 }
 
 export interface ResearchResponse {

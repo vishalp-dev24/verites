@@ -58,7 +58,7 @@ AWS_REGION=us-east-1
 await llmService.generate(messages, { provider: 'auto' });
 
 // Force Bedrock
-await llmService.generate(messages, { 
+await llmService.generate(messages, {
   provider: 'bedrock',
   model: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
 });

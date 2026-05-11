@@ -1,13 +1,9 @@
 
 import { Task, TaskResult, Source } from '../types/index.js';
-import { blackboard } from '../blackboard/index.js';
 import { artifactStore } from '../artifact-store/index.js';
-import { TavilySearchService } from '../search/providers/tavily.js';
+import { searchService } from '../search/index.js';
 import { trustScorer } from '../trust-scorer/index.js';
 import { securityService } from '../security/index.js';
-import { prisma } from '../database/client.js';
-
-const searchService = new TavilySearchService();
 
 interface WorkerOptions {
   jobId: string;
@@ -26,7 +22,6 @@ export class WorkerFleet {
     const taskId = task.task_id;
     const artifactId = task.artifact_id || `${this.options.jobId}_artifact_${taskId}`;
 
-    const jobState = await blackboard.getJobState(this.options.jobId);
     const searchResults = await searchService.search(task.query || '', { maxResults: task.source_config?.target_sources || 5 });
     const sources: Partial<Source>[] = [];
 

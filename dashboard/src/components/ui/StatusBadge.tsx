@@ -15,33 +15,33 @@ interface ModeBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 const StatusBadge = forwardRef<HTMLSpanElement, StatusBadgeProps>(
   ({ status, className, ...props }, ref) => {
     const statusStyles: Record<JobStatus, { bg: string; text: string; dot: string }> = {
-      pending: { 
-        bg: 'bg-slate-500/10', 
+      pending: {
+        bg: 'bg-slate-500/10',
         text: 'text-slate-400',
         dot: 'bg-slate-400'
       },
-      queued: { 
-        bg: 'bg-blue-500/10', 
+      queued: {
+        bg: 'bg-blue-500/10',
         text: 'text-blue-400',
         dot: 'bg-blue-400'
       },
-      processing: { 
-        bg: 'bg-violet-500/10', 
+      processing: {
+        bg: 'bg-violet-500/10',
         text: 'text-violet-400',
         dot: 'bg-violet-400'
       },
-      complete: { 
-        bg: 'bg-emerald-500/10', 
+      complete: {
+        bg: 'bg-emerald-500/10',
         text: 'text-emerald-400',
         dot: 'bg-emerald-400'
       },
-      failed: { 
-        bg: 'bg-red-500/10', 
+      failed: {
+        bg: 'bg-red-500/10',
         text: 'text-red-400',
         dot: 'bg-red-400'
       },
-      cancelled: { 
-        bg: 'bg-amber-500/10', 
+      cancelled: {
+        bg: 'bg-amber-500/10',
         text: 'text-amber-400',
         dot: 'bg-amber-400'
       },
@@ -73,18 +73,18 @@ StatusBadge.displayName = 'StatusBadge';
 const ModeBadge = forwardRef<HTMLSpanElement, ModeBadgeProps>(
   ({ mode, className, ...props }, ref) => {
     const modeStyles: Record<ResearchMode, { bg: string; text: string; border: string }> = {
-      lite: { 
-        bg: 'bg-emerald-500/10', 
+      lite: {
+        bg: 'bg-emerald-500/10',
         text: 'text-emerald-400',
         border: 'border-emerald-500/20'
       },
-      medium: { 
-        bg: 'bg-amber-500/10', 
+      medium: {
+        bg: 'bg-amber-500/10',
         text: 'text-amber-400',
         border: 'border-amber-500/20'
       },
-      deep: { 
-        bg: 'bg-violet-500/10', 
+      deep: {
+        bg: 'bg-violet-500/10',
         text: 'text-violet-400',
         border: 'border-violet-500/20'
       },

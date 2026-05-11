@@ -32,13 +32,15 @@ export class SessionMemoryService {
    * Get or create session
    */
   async getSession(sessionId: string, tenantId: string): Promise<SessionMemory> {
+    const cacheKey = this.getCacheKey(sessionId, tenantId);
+
     // Try Redis first
-    let session = await sessionMemory.get(sessionId);
+    let session = await sessionMemory.get(cacheKey);
 
     if (!session) {
       // Try database
-      const dbSession = await prisma.session.findUnique({
-        where: { sessionId },
+      const dbSession = await prisma.session.findFirst({
+        where: { sessionId, tenantId },
       });
 
       if (dbSession) {
@@ -52,7 +54,7 @@ export class SessionMemoryService {
         };
 
         // Restore to Redis
-        await this.saveToRedis(sessionId, session);
+        await this.saveToRedis(sessionId, tenantId, session);
       } else {
         // Create new session
         session = {
@@ -65,7 +67,7 @@ export class SessionMemoryService {
         };
 
         await this.saveToDatabase(sessionId, tenantId, session);
-        await this.saveToRedis(sessionId, session);
+        await this.saveToRedis(sessionId, tenantId, session);
       }
     }
 
@@ -75,47 +77,52 @@ export class SessionMemoryService {
   /**
    * Add topic to session
    */
-  async addTopic(sessionId: string, topic: string): Promise<void> {
-    const session = await sessionMemory.get(sessionId);
-    if (session) {
-      const topics = session.topics_researched as string[] || [];
-      if (!topics.includes(topic) && topics.length < this.config.maxTopics) {
-        topics.push(topic);
-        session.topics_researched = topics;
-        await this.saveToRedis(sessionId, session);
-        await sessionMemory.appendTopic(sessionId, topic);
-      }
+  async addTopic(sessionId: string, tenantId: string, topic: string): Promise<void> {
+    const cacheKey = this.getCacheKey(sessionId, tenantId);
+    const session = await this.getSession(sessionId, tenantId) as unknown as Record<string, unknown>;
+    const topics = session.topics_researched as string[] || [];
+
+    if (!topics.includes(topic) && topics.length < this.config.maxTopics) {
+      topics.push(topic);
+      session.topics_researched = topics;
+      session.timestamp = new Date().toISOString();
+      await this.saveToRedis(sessionId, tenantId, session);
+      await this.saveToDatabase(sessionId, tenantId, session);
+      await sessionMemory.appendTopic(cacheKey, topic);
     }
   }
 
   /**
    * Add conclusion to session
    */
-  async addConclusion(sessionId: string, conclusion: string): Promise<void> {
-    const session = await sessionMemory.get(sessionId);
-    if (session) {
-      const conclusions = session.key_conclusions as string[] || [];
-      if (conclusions.length < this.config.maxConclusions) {
-        conclusions.push(conclusion);
-        session.key_conclusions = conclusions;
-        await this.saveToRedis(sessionId, session);
-        await sessionMemory.appendConclusion(sessionId, conclusion);
-      }
+  async addConclusion(sessionId: string, tenantId: string, conclusion: string): Promise<void> {
+    const cacheKey = this.getCacheKey(sessionId, tenantId);
+    const session = await this.getSession(sessionId, tenantId) as unknown as Record<string, unknown>;
+    const conclusions = session.key_conclusions as string[] || [];
+
+    if (conclusions.length < this.config.maxConclusions) {
+      conclusions.push(conclusion);
+      session.key_conclusions = conclusions;
+      session.timestamp = new Date().toISOString();
+      await this.saveToRedis(sessionId, tenantId, session);
+      await this.saveToDatabase(sessionId, tenantId, session);
+      await sessionMemory.appendConclusion(cacheKey, conclusion);
     }
   }
 
   /**
    * Add follow-up query to session
    */
-  async addFollowUpQuery(sessionId: string, query: string): Promise<void> {
-    const session = await sessionMemory.get(sessionId);
-    if (session) {
-      const queries = session.follow_up_queries as string[] || [];
-      if (!queries.includes(query)) {
-        queries.push(query);
-        session.follow_up_queries = queries;
-        await this.saveToRedis(sessionId, session);
-      }
+  async addFollowUpQuery(sessionId: string, tenantId: string, query: string): Promise<void> {
+    const session = await this.getSession(sessionId, tenantId) as unknown as Record<string, unknown>;
+    const queries = session.follow_up_queries as string[] || [];
+
+    if (!queries.includes(query)) {
+      queries.push(query);
+      session.follow_up_queries = queries;
+      session.timestamp = new Date().toISOString();
+      await this.saveToRedis(sessionId, tenantId, session);
+      await this.saveToDatabase(sessionId, tenantId, session);
     }
   }
 
@@ -127,7 +134,7 @@ export class SessionMemoryService {
     tenantId: string
   ): Promise<{ topics: string[]; conclusions: string[]; recentQueries: string[] }> {
     const session = await this.getSession(sessionId, tenantId);
-    
+
     return {
       topics: session.topics_researched,
       conclusions: session.key_conclusions.slice(-10), // Last 10
@@ -158,9 +165,9 @@ export class SessionMemoryService {
   /**
    * Clear session
    */
-  async clearSession(sessionId: string, _tenantId: string): Promise<void> {
-    await prisma.session.deleteMany({ where: { sessionId } });
-    await sessionMemory.delete(sessionId);
+  async clearSession(sessionId: string, tenantId: string): Promise<void> {
+    await prisma.session.deleteMany({ where: { sessionId, tenantId } });
+    await sessionMemory.delete(this.getCacheKey(sessionId, tenantId));
   }
 
   /**
@@ -177,12 +184,12 @@ export class SessionMemoryService {
     },
     tenantId: string
   ): Promise<void> {
-    await this.addTopic(sessionId, data.query);
-    await this.addConclusion(sessionId, data.summary);
-    
+    await this.addTopic(sessionId, tenantId, data.query);
+    await this.addConclusion(sessionId, tenantId, data.summary);
+
     // Store summary in Prisma
     await prisma.session.updateMany({
-      where: { sessionId },
+      where: { sessionId, tenantId },
       data: {
         updatedAt: new Date(),
       },
@@ -197,15 +204,25 @@ export class SessionMemoryService {
     tenantId: string,
     session: Record<string, unknown>
   ): Promise<void> {
-    await prisma.session.upsert({
-      where: { sessionId },
-      update: {
-        topicsResearched: session.topics_researched as string[],
-        keyConclusions: session.key_conclusions as string[],
-        followUpQueries: session.follow_up_queries as string[],
-        updatedAt: new Date(),
-      },
-      create: {
+    const existing = await prisma.session.findFirst({
+      where: { sessionId, tenantId },
+    });
+
+    if (existing) {
+      await prisma.session.update({
+        where: { id: existing.id },
+        data: {
+          topicsResearched: session.topics_researched as string[],
+          keyConclusions: session.key_conclusions as string[],
+          followUpQueries: session.follow_up_queries as string[],
+          updatedAt: new Date(),
+        },
+      });
+      return;
+    }
+
+    await prisma.session.create({
+      data: {
         sessionId,
         tenantId,
         topicsResearched: session.topics_researched as string[],
@@ -218,9 +235,18 @@ export class SessionMemoryService {
 
   private async saveToRedis(
     sessionId: string,
+    tenantId: string,
     session: Record<string, unknown>
   ): Promise<void> {
-    await sessionMemory.set(sessionId, session, this.config.ttlDays);
+    await sessionMemory.set(this.getCacheKey(sessionId, tenantId), session, this.config.ttlDays);
+  }
+
+  private getCacheKey(sessionId: string, tenantId: string): string {
+    return `${this.encodeKeyPart(tenantId)}:${this.encodeKeyPart(sessionId)}`;
+  }
+
+  private encodeKeyPart(value: string): string {
+    return Buffer.from(value, 'utf8').toString('hex');
   }
 }
 

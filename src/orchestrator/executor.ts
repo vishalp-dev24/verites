@@ -1,7 +1,7 @@
 
 /**
  * Veritas Orchestrator Executor
- * 
+ *
  * The orchestrator:
  * 1. Receives initial worker results
  * 2. Analyzes for doubts (gaps, contradictions, low confidence)
@@ -18,6 +18,7 @@ import { artifactStore } from '../artifact-store/index.js';
 import { llmService } from '../llm/index.js';
 import { logger } from '../utils/logger.js';
 import { redis } from '../redis/client.js';
+import { prisma } from '../database/client.js';
 
 export interface OrchestratorConfig {
   jobId: string;
@@ -46,7 +47,6 @@ export interface OrchestratorResult {
 
 export class OrchestratorExecutor {
   async run(config: OrchestratorConfig): Promise<OrchestratorResult> {
-    const startTime = Date.now();
     let iteration = 0;
     let totalCost = 0;
     const reDispatchedTasks: string[] = [];
@@ -58,6 +58,7 @@ export class OrchestratorExecutor {
     let currentFindings = await this.getCurrentFindings(config.jobId);
 
     while (iteration < config.maxIterations) {
+      await this.ensureNotCancelled(config);
       iteration++;
       logger.info('Orchestrator', `Orchestrator iteration ${iteration}`, { jobId: config.jobId });
 
@@ -136,8 +137,9 @@ export class OrchestratorExecutor {
       logger.info('Orchestrator', `Re-dispatching for ${topDoubts.length} doubts`);
 
       for (const doubt of topDoubts) {
+        await this.ensureNotCancelled(config);
         const task = this.doubtToTask(doubt, config);
-        
+
         logger.debug('Orchestrator', 'Dispatching task for doubt', {
           doubtId: doubt.id,
           type: doubt.type,
@@ -145,7 +147,7 @@ export class OrchestratorExecutor {
         });
 
         const results = await workerFleet.dispatchTasks([task], config.jobId, config.tenantId);
-        
+
         for (const result of results) {
           if (result.success) {
             await this.updateBlackboard(config.jobId, result);
@@ -182,14 +184,43 @@ export class OrchestratorExecutor {
 
   private async getCurrentFindings(jobId: string): Promise<any[]> {
     const facts = await blackboard.getJobState(jobId);
-    return facts?.verifiedFacts || [];
+    if (facts?.verifiedFacts?.length) {
+      return facts.verifiedFacts;
+    }
+
+    const artifacts = await artifactStore.getByJobId(jobId);
+    return artifacts.map((artifact) => ({
+      id: artifact.artifact_id,
+      taskId: artifact.task_id,
+      topic: artifact.task_id,
+      claim: artifact.content,
+      content: artifact.content,
+      value: artifact.content,
+      sources: artifact.sources,
+      confidence: 0.7,
+      verified: true,
+    }));
+  }
+
+  private async ensureNotCancelled(config: OrchestratorConfig): Promise<void> {
+    const job = await prisma.researchJob.findFirst({
+      where: {
+        jobId: config.jobId,
+        tenantId: config.tenantId,
+      },
+      select: { status: true },
+    });
+
+    if (job?.status === 'cancelled') {
+      throw new Error('Job cancelled');
+    }
   }
 
   private convertToFindings(data: any[]): Finding[] {
     return data.map(d => ({
       taskId: d.taskId || d.id || 'unknown',
       topic: d.topic || d.key || 'Unknown',
-      content: d.value || d.content || d.findings || '',
+      content: d.claim || d.value || d.content || d.findings || '',
       sources: d.sources || d.sourceUrls || [],
       confidence: d.confidence || 0.5,
     }));
@@ -197,7 +228,7 @@ export class OrchestratorExecutor {
 
   private doubtToTask(doubt: Doubt, config: OrchestratorConfig): Task {
     return {
-      id: `redispatch_${uuidv4().slice(0, 8)}`,
+      id: `${config.jobId}_redispatch_${uuidv4().replace(/-/g, '')}`,
       sessionId: config.sessionId,
       topic: doubt.suggestedQuery,
       scope: `Address doubt: ${doubt.description}`,
@@ -231,7 +262,7 @@ export class OrchestratorExecutor {
     if (findings.length === 0) return 0;
 
     const prompt = `Rate the overall quality of these research findings (0-1 scale):
-${findings.map((f: any, i: number) => `${i + 1}. ${(f.value || '').slice(0, 200)}`).join('\n')}
+${findings.map((f: any, i: number) => `${i + 1}. ${(f.claim || f.value || f.content || '').slice(0, 200)}`).join('\n')}
 
 Return only a number.`;
 
@@ -311,7 +342,7 @@ Return as JSON: {"summary": "text", "keyFacts": ["fact1"], "confidence": 0.85}`;
     try {
       const response = await llmService.generate([{ role: 'user', content: prompt }], {});
       const structured = JSON.parse(response);
-      
+
       return {
         text: structured.summary || combinedFindings,
         structured,

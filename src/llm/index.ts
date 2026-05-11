@@ -84,7 +84,7 @@ export class LLMService {
     options: LLMOptions = {}
   ): Promise<string> {
     const provider = options.provider || this.primaryProvider;
-    
+
     // Check circuit breaker
     if (this.circuitBreakerOpen) {
       if (Date.now() - this.lastFailure < 1200000) { // 20 min
@@ -115,15 +115,15 @@ export class LLMService {
 
       // Reset failovers on success
       this.failovers = 0;
-      
+
       // Log usage
       await this.logUsage(options, usage);
 
       return content;
-    } catch (error) {
+    } catch {
       this.failovers++;
       this.lastFailure = Date.now();
-      
+
       if (this.failovers >= 3) {
         this.circuitBreakerOpen = true;
       }
@@ -142,7 +142,7 @@ export class LLMService {
     options: LLMOptions
   ): Promise<{ content: string; usage?: { total_tokens: number; prompt_tokens: number; completion_tokens: number } }> {
     const model = options.model || PROVIDERS.openai.defaultModel;
-    
+
     const completion = await openai.chat.completions.create({
       model,
       messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
@@ -172,10 +172,10 @@ export class LLMService {
     }
 
     const modelId = options.model || PROVIDERS.bedrock.defaultModel;
-    
+
     // Format messages based on model provider
     let body: any;
-    
+
     if (modelId.includes('anthropic')) {
       // Claude format
       body = {
@@ -196,7 +196,7 @@ export class LLMService {
         temperature: options.temperature ?? 0.3,
       };
     } else if (modelId.includes('mistral')) {
-      // Mistral format  
+      // Mistral format
       const promptText = this.formatMessagesForMistral(messages);
       body = {
         prompt: promptText,
@@ -269,7 +269,7 @@ export class LLMService {
   }
 
   /**
-   * Format messages for Mistral models  
+   * Format messages for Mistral models
    */
   private formatMessagesForMistral(messages: ChatMessage[]): string {
     return messages.map(m => {
@@ -287,7 +287,7 @@ export class LLMService {
     options: LLMOptions
   ): Promise<string> {
     const fallbackProvider = options.provider === 'openai' ? 'bedrock' : 'openai';
-    
+
     try {
       let result;
       if (fallbackProvider === 'bedrock' && bedrock) {
@@ -295,7 +295,7 @@ export class LLMService {
       } else {
         result = await this.generateOpenAI(messages, { ...options, provider: 'openai' });
       }
-      
+
       return result.content || '';
     } catch (error) {
       console.error('LLM fallback failed:', error);
@@ -337,7 +337,7 @@ Return JSON format:
 }`;
 
     const response = await this.generate([{ role: 'user', content: prompt }], { ...options, temperature: 0.2 });
-    
+
     try {
       const parsed = JSON.parse(response);
       return parsed;
@@ -368,7 +368,7 @@ Output must match this schema: ${JSON.stringify(outputSchema)}
 Return only the JSON matching the schema.`;
 
     const response = await this.generate([{ role: 'user', content: prompt }], { ...options, temperature: 0.1 });
-    
+
     try {
       return JSON.parse(response);
     } catch {
@@ -391,7 +391,7 @@ Sources: ${sources.length} sources
 Return JSON: {"sourceRelevance": 8, "claimAccuracy": 7, "overall": 7.5}`;
 
     const response = await this.generate([{ role: 'user', content: prompt }], { ...options, temperature: 0 });
-    
+
     try {
       return JSON.parse(response);
     } catch {
@@ -417,7 +417,7 @@ Return JSON: {"sourceRelevance": 8, "claimAccuracy": 7, "overall": 7.5}`;
           return PROVIDERS.bedrock.defaultModel;
       }
     }
-    
+
     // OpenAI models
     switch (task) {
       case 'planning':

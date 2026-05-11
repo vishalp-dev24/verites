@@ -1,23 +1,18 @@
 /**
  * Trust Scorer
  * Evaluates every source on credibility factors
- * 
+ *
  * Factors:
  * - Domain authority
  * - Content freshness (days since publish)
  * - Source type (primary vs secondary)
  * - Citation depth
  * - Cross-source consistency
- * 
+ *
  * Output: trust score 0.0-1.0 per source
  */
 
 import { TrustScoreInput, TrustScoreOutput } from '../types/index.js';
-
-interface DomainAuthority {
-  domain: string;
-  authority: number;
-}
 
 // Domain authority database (would be populated from external source)
 const domainAuthorityDB: Map<string, number> = new Map([
@@ -45,7 +40,7 @@ export class TrustScorer {
     const consistency = input.cross_source_consistency;
 
     // Weighted average
-    const score = 
+    const score =
       domainAuthority * 0.25 +
       freshness * 0.20 +
       sourceType * 0.25 +
@@ -113,7 +108,7 @@ export class TrustScorer {
     mode: 'lite' | 'medium' | 'deep'
   ): boolean {
     const score = this.calculate(input);
-    
+
     const thresholds = {
       lite: 0.3,
       medium: 0.5,

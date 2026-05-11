@@ -5,8 +5,12 @@
 
 import { Redis } from 'ioredis';
 
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const isDev = process.env.NODE_ENV === 'development';
+const redisUrl = process.env.REDIS_URL || (isDev || process.env.NODE_ENV === 'test' ? 'redis://localhost:6379' : '');
+
+if (!redisUrl) {
+  throw new Error('REDIS_URL is required outside development/test');
+}
 
 export const redis = new Redis(redisUrl, {
   retryStrategy: (times: number) => {
@@ -168,7 +172,7 @@ export const semanticCache = {
     // Add artificial delay for timing attack prevention
     const artificialDelay = Math.random() * 320 + 80; // 80-400ms
     await new Promise(resolve => setTimeout(resolve, artificialDelay));
-    
+
     await redis.setex(`cache:${fingerprint}`, ttlMinutes * 60, JSON.stringify(data));
   },
 
@@ -204,7 +208,7 @@ export const rateLimiter = {
   ): Promise<{ allowed: boolean; remaining: number }> {
     const key = `rate:${tenantId}:${Math.floor(Date.now() / (windowSeconds * 1000))}`;
     const count = await redis.incr(key);
-    
+
     if (count === 1) {
       await redis.expire(key, windowSeconds);
     }
@@ -229,13 +233,13 @@ export const apiKeyTracking = {
     const today = new Date().toISOString().split('T')[0];
     const stats = await redis.hgetall(`key:${keyId}:daily`);
     const result: Record<string, number> = {};
-    
+
     for (const [key, value] of Object.entries(stats)) {
       if (key.startsWith(today)) {
         result[key] = parseInt(value as string, 10);
       }
     }
-    
+
     return result;
   },
 };

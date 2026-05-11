@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 
-interface SearchResult {
+export interface SearchResult {
   url: string;
   title: string;
   content: string;
@@ -13,11 +13,27 @@ interface SearchResult {
   published_date?: string;
 }
 
-interface SearchOptions {
+export interface SearchOptions {
   maxResults: number;
   timeRange?: string;
   includeDomains?: string[];
   excludeDomains?: string[];
+}
+
+function sanitizeProviderError(provider: string, error: unknown): Record<string, unknown> {
+  if (axios.isAxiosError(error)) {
+    return {
+      provider,
+      status: error.response?.status,
+      code: error.code,
+      message: error.message,
+    };
+  }
+
+  return {
+    provider,
+    message: error instanceof Error ? error.message : String(error),
+  };
 }
 
 export class SearchService {
@@ -35,7 +51,7 @@ export class SearchService {
       try {
         return await this.searchTavily(query, options);
       } catch (error) {
-        console.warn('[Search] Tavily failed, falling back:', error);
+        console.warn('[Search] Tavily failed, falling back:', sanitizeProviderError('tavily', error));
       }
     }
 
@@ -44,12 +60,11 @@ export class SearchService {
       try {
         return await this.searchExa(query, options);
       } catch (error) {
-        console.warn('[Search] Exa failed:', error);
+        console.warn('[Search] Exa failed:', sanitizeProviderError('exa', error));
       }
     }
 
-    // Fallback: mock results for development
-    return this.mockSearch(query, options);
+    throw new Error('No search provider configured. Set TAVILY_API_KEY or EXA_API_KEY.');
   }
 
   private async searchTavily(query: string, options: SearchOptions): Promise<SearchResult[]> {
@@ -100,17 +115,6 @@ export class SearchService {
     }));
   }
 
-  private mockSearch(query: string, options: SearchOptions): SearchResult[] {
-    return [
-      {
-        url: 'https://example.com/result1',
-        title: `Results for: ${query}`,
-        content: 'Mock search result content for development',
-        domain: 'example.com',
-        published_date: new Date().toISOString(),
-      },
-    ];
-  }
 }
 
 export const searchService = new SearchService();

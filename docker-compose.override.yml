@@ -1,7 +1,7 @@
-# Docker Compose override for development
-# This file is automatically used by docker-compose when present
-
-version: '3.8'
+# Docker Compose override for local development only.
+# Compose auto-loads this file when present, so plain `docker compose up`
+# in this checkout is not a production deployment. For production, run only
+# the base file: `docker compose -f docker-compose.yml up -d --build`.
 
 services:
   api:

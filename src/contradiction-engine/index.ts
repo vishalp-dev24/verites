@@ -1,7 +1,7 @@
 /**
  * Contradiction Engine
  * Cross-comparison of claims from different sources
- * 
+ *
  * Outputs:
  * - Claims agreed by majority
  * - Claims contradicted (with source attribution)
@@ -182,7 +182,7 @@ ${source.content_excerpt}` },
 
       const parsed = JSON.parse(content);
       return parsed.contradiction && parsed.confidence > 0.7;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -192,7 +192,7 @@ ${source.content_excerpt}` },
    */
   private calculateSeverity(claimA: Claim, claimB: Claim): 'low' | 'medium' | 'high' {
     const avgTrust = (claimA.confidence + claimB.confidence) / 2;
-    
+
     if (avgTrust >= 0.8) return 'high';
     if (avgTrust >= 0.5) return 'medium';
     return 'low';

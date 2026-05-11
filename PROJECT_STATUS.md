@@ -1,12 +1,12 @@
-# Research Platform - Project Status
+# Veritas - Project Status
 
 ## ✅ Created Structure
 
 ```
-research-platform/
+veritas/
 ├── src/
-│   ├── api-gateway/          # Express + MCP server
-│   ├── planning-layer/       # Query analysis, task manifests
+│   ├── api/                  # Express routes and middleware
+│   ├── research-service.ts   # Job submission and lifecycle orchestration
 │   ├── worker-fleet/          # Parallel workers with checkpointing
 │   ├── orchestrator/          # Doubt-loop verification
 │   ├── blackboard/           # Shared worker intelligence
@@ -16,7 +16,7 @@ research-platform/
 │   ├── security/             # 4-layer injection defense
 │   ├── session-memory/       # Persistent context
 │   ├── formatter/            # Schema-defined output
-│   ├── billing/              # Stripe + Flexprice
+│   ├── billing/              # Razorpay credit billing
 │   └── types/                # Core TypeScript types
 ├── dashboard/                # Developer web UI
 ├── sdk/
@@ -41,28 +41,26 @@ research-platform/
 - SecurityEvent, SessionMemory
 - CostEstimate, Trust Score types
 
-### 2. API Gateway (`src/api-gateway/index.ts`)
-- Express MCP server
+### 2. API Routes (`src/api/routes.ts`)
+- Express REST routes
 - Request validation with Zod
-- API key middleware (placeholder)
-- Rate limiting (placeholder)
-- SSE stream endpoint
+- API key validation and tenant lookup
+- Pre-auth and API-key rate limiting
+- Research submission/status, usage, API key, session, security, and admin endpoints
 - Health check
 
-### 3. Planning Layer (`src/planning-layer/index.ts`)
-- Query analysis with LLM
-- Task manifest generation
-- Cost estimation
-- Budget checking
-- Fallback mode selection
+### 3. Research Service (`src/research-service.ts`)
+- Cost estimation and credit reservation
+- Queued job creation
+- Background execution through workers and orchestrator
+- Cancellation-aware finalization and billing
 
-### 4. Worker Fleet (`src/worker-fleet/worker.ts`)
-- Puppeteer browser automation
-- Content extraction with Cheerio
+### 4. Worker Fleet (`src/worker-fleet/executor.ts`, `src/worker-fleet/index.ts`)
+- Search-backed task execution
+- Optional browser-assisted extraction
 - 4-layer security check
 - Trust scoring
-- Checkpointing after each source
-- Proxy rotation
+- Task and artifact persistence
 - Blackboard updates
 
 ### 5. Orchestrator (`src/orchestrator/index.ts`)
@@ -82,7 +80,7 @@ research-platform/
 ## 🚧 Next Steps (Phase 1)
 
 ### Infrastructure
-- [ ] Install dependencies: `pnpm install`
+- [ ] Install dependencies: `npm install`
 - [ ] Set up Prisma ORM with PostgreSQL
 - [ ] Set up Redis for queues
 - [ ] Set up BullMQ for job processing
@@ -99,8 +97,8 @@ research-platform/
 - [ ] Complete security pipeline
 
 ### Billing
-- [ ] Stripe integration
-- [ ] Flexprice credit wallet
+- [ ] Razorpay integration
+- [ ] Credit wallet
 - [ ] Usage metering
 - [ ] Automated billing events
 
@@ -146,21 +144,21 @@ research-platform/
 
 ```bash
 # Setup
-cd ~/research-platform
+cd ~/verites
 ./scripts/dev-setup.sh
 
 # Install dependencies
-pnpm install
+npm install
 
 # Development
-pnpm dev                    # API Gateway
-pnpm typecheck             # TypeScript check
-pnpm lint                  # ESLint
+npm run dev                    # API Gateway
+npm run typecheck             # TypeScript check
+npm run lint                  # ESLint
 
 # Database
 npx prisma migrate dev      # Run migrations
 npx prisma studio           # DB browser
 
 # Testing
-pnpm test                   # Run all tests
+npm test -- --run                   # Run all tests
 ```

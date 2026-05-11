@@ -46,7 +46,7 @@ export class SecurityService {
       /prompt injection/i,
       /DAN mode/i,
       /jailbreak/i,
-      /ignore safety guidelines/i,
+      /ignore (?:all\s+)?safety guidelines/i,
     ];
 
     const combinedText = `${input.title} ${input.body_text}`.toLowerCase();
@@ -92,14 +92,17 @@ export class SecurityService {
       console.error('[Security] Classification error:', error);
     }
 
-    // Fallback to pattern-only detection
-    const riskScore = Math.min(flaggedPatterns.length * 0.3, 1.0);
-    
+    // Fallback to pattern-only detection. If the classifier is unavailable,
+    // known injection language must fail closed instead of reaching extraction.
+    const riskScore = flaggedPatterns.length > 0
+      ? Math.min(Math.max(flaggedPatterns.length * 0.4, 0.7), 1.0)
+      : 0;
+
     return {
       safe: riskScore < 0.7,
       risk_score: riskScore,
       flagged_patterns: flaggedPatterns,
-      action: riskScore > 0.6 ? 'quarantine' : 'allow',
+      action: riskScore > 0.9 ? 'block' : riskScore >= 0.7 ? 'quarantine' : 'allow',
     };
   }
 

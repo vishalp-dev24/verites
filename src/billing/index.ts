@@ -6,8 +6,8 @@
 
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../database/client.js';
-import { semanticCache } from '../redis/client.js';
 
 let razorpay: Razorpay | null = null;
 
@@ -31,6 +31,19 @@ interface BillingEvent {
   mode: string;
   workersUsed: number;
   iterations: number;
+  creditsUsed: number;
+}
+
+interface CreditReservation {
+  jobId: string;
+  tenantId: string;
+  mode: string;
+  workersUsed: number;
+  iterations: number;
+  creditsReserved: number;
+}
+
+interface CreditReservationFinalization extends CreditReservation {
   creditsUsed: number;
 }
 
@@ -70,29 +83,199 @@ const MODE_COSTS: Record<string, number> = {
 
 export class BillingService {
   /**
-   * Process billing event
+   * Reserve credits before paid work starts. This closes concurrent over-spend
+   * where multiple jobs pass a read-only balance check before any deduction.
    */
-  async processEvent(event: BillingEvent): Promise<void> {
-    // Deduct credits
-    await prisma.tenant.update({
-      where: { tenantId: event.tenantId },
+  async reserveCredits(
+    reservation: CreditReservation,
+    tx: Prisma.TransactionClient = prisma
+  ): Promise<void> {
+    const creditsReserved = this.validatePositiveCreditAmount(
+      reservation.creditsReserved,
+      'creditsReserved'
+    );
+
+    const updated = await tx.tenant.updateMany({
+      where: {
+        tenantId: reservation.tenantId,
+        creditsBalance: { gte: creditsReserved },
+      },
       data: {
-        creditsBalance: { decrement: event.creditsUsed },
-        creditsUsed: { increment: event.creditsUsed },
+        creditsBalance: { decrement: creditsReserved },
       },
     });
 
-    // Store billing event
-    await prisma.billingEvent.create({
-      data: {
-        eventId: `evt_${Date.now()}_${event.tenantId}`,
-        tenantId: event.tenantId,
-        jobId: event.jobId,
-        mode: event.mode,
-        workersUsed: event.workersUsed,
-        iterations: event.iterations,
-        creditsUsed: event.creditsUsed,
+    if (updated.count !== 1) {
+      throw new Error('Insufficient credits');
+    }
+  }
+
+  /**
+   * Finalize an existing reservation with actual usage and refund unused
+   * reserved credits. If actual usage exceeds the reservation, atomically debit
+   * the difference before recording the event.
+   */
+  async finalizeCreditReservation(
+    finalization: CreditReservationFinalization,
+    tx?: Prisma.TransactionClient
+  ): Promise<void> {
+    if (tx) {
+      await this.finalizeCreditReservationInTransaction(finalization, tx);
+      return;
+    }
+
+    await prisma.$transaction(async (transaction) => {
+      await this.finalizeCreditReservationInTransaction(finalization, transaction);
+    });
+
+    await this.checkBalance(finalization.tenantId);
+  }
+
+  private async finalizeCreditReservationInTransaction(
+    finalization: CreditReservationFinalization,
+    tx: Prisma.TransactionClient
+  ): Promise<void> {
+    const creditsReserved = this.validatePositiveCreditAmount(
+      finalization.creditsReserved,
+      'creditsReserved'
+    );
+    const creditsUsed = this.validatePositiveCreditAmount(finalization.creditsUsed, 'creditsUsed');
+    const delta = creditsUsed - creditsReserved;
+
+    const jobFinalization = await tx.researchJob.updateMany({
+      where: {
+        jobId: finalization.jobId,
+        tenantId: finalization.tenantId,
+        billingFinalizedAt: null,
+        reservationReleasedAt: null,
       },
+      data: {
+        billingFinalizedAt: new Date(),
+      },
+    });
+
+    if (jobFinalization.count !== 1) {
+      return;
+    }
+
+    const eventCreate = await tx.billingEvent.createMany({
+      data: [{
+        eventId: `evt_${crypto.randomUUID()}`,
+        tenantId: finalization.tenantId,
+        jobId: finalization.jobId,
+        mode: finalization.mode,
+        workersUsed: finalization.workersUsed,
+        iterations: finalization.iterations,
+        creditsUsed,
+      }],
+      skipDuplicates: true,
+    });
+
+    if (eventCreate.count === 0) {
+      return;
+    }
+
+    if (delta > 0) {
+      const updated = await tx.tenant.updateMany({
+        where: {
+          tenantId: finalization.tenantId,
+          creditsBalance: { gte: delta },
+        },
+        data: {
+          creditsBalance: { decrement: delta },
+          creditsUsed: { increment: creditsUsed },
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new Error('Insufficient credits');
+      }
+    } else {
+      await tx.tenant.update({
+        where: { tenantId: finalization.tenantId },
+        data: {
+          creditsBalance: { increment: Math.abs(delta) },
+          creditsUsed: { increment: creditsUsed },
+        },
+      });
+    }
+  }
+
+  async releaseCreditReservation(tenantId: string, creditsReserved: number): Promise<void> {
+    const creditsToRelease = this.validatePositiveCreditAmount(creditsReserved, 'creditsReserved');
+
+    await prisma.tenant.update({
+      where: { tenantId },
+      data: {
+        creditsBalance: { increment: creditsToRelease },
+      },
+    });
+  }
+
+  async releaseCreditReservationForJob(
+    jobId: string,
+    tenantId: string,
+    creditsReserved: number
+  ): Promise<void> {
+    const creditsToRelease = this.validatePositiveCreditAmount(creditsReserved, 'creditsReserved');
+
+    await prisma.$transaction(async (tx) => {
+      const release = await tx.researchJob.updateMany({
+        where: {
+          jobId,
+          tenantId,
+          billingFinalizedAt: null,
+          reservationReleasedAt: null,
+        },
+        data: {
+          reservationReleasedAt: new Date(),
+        },
+      });
+
+      if (release.count !== 1) return;
+
+      await tx.tenant.update({
+        where: { tenantId },
+        data: {
+          creditsBalance: { increment: creditsToRelease },
+        },
+      });
+    });
+  }
+
+  /**
+   * Process billing event
+   */
+  async processEvent(event: BillingEvent): Promise<void> {
+    const creditsUsed = this.validatePositiveCreditAmount(event.creditsUsed, 'creditsUsed');
+
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.tenant.updateMany({
+        where: {
+          tenantId: event.tenantId,
+          creditsBalance: { gte: creditsUsed },
+        },
+        data: {
+          creditsBalance: { decrement: creditsUsed },
+          creditsUsed: { increment: creditsUsed },
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new Error('Insufficient credits');
+      }
+
+      await tx.billingEvent.create({
+        data: {
+          eventId: `evt_${crypto.randomUUID()}`,
+          tenantId: event.tenantId,
+          jobId: event.jobId,
+          mode: event.mode,
+          workersUsed: event.workersUsed,
+          iterations: event.iterations,
+          creditsUsed,
+        },
+      });
     });
 
     // Check if balance is low
@@ -125,6 +308,7 @@ export class BillingService {
     estimatedCost: number;
     afterBalance: number;
   }> {
+    const requestedCost = this.validatePositiveCreditAmount(estimatedCost, 'estimatedCost');
     const tenant = await prisma.tenant.findUnique({
       where: { tenantId },
     });
@@ -133,17 +317,17 @@ export class BillingService {
       return {
         allowed: false,
         currentBalance: 0,
-        estimatedCost,
-        afterBalance: -estimatedCost,
+        estimatedCost: requestedCost,
+        afterBalance: -requestedCost,
       };
     }
 
-    const afterBalance = tenant.creditsBalance - estimatedCost;
+    const afterBalance = tenant.creditsBalance - requestedCost;
 
     return {
       allowed: afterBalance >= 0,
       currentBalance: tenant.creditsBalance,
-      estimatedCost,
+      estimatedCost: requestedCost,
       afterBalance,
     };
   }
@@ -152,10 +336,12 @@ export class BillingService {
    * Add credits to tenant
    */
   async addCredits(tenantId: string, amount: number): Promise<void> {
+    const creditsToAdd = this.validatePositiveCreditAmount(amount, 'amount');
+
     await prisma.tenant.update({
       where: { tenantId },
       data: {
-        creditsBalance: { increment: amount },
+        creditsBalance: { increment: creditsToAdd },
       },
     });
   }
@@ -212,7 +398,7 @@ export class BillingService {
     // Alert thresholds
     if (percentRemaining <= 0.1) {
       console.log(`[Billing] ALERT: ${tenantId} credit balance at ${Math.round(percentRemaining * 100)}%`);
-      // TODO: Send email/notification via SES
+      // Notification delivery is handled by the deployment's alerting integration.
     } else if (percentRemaining <= 0.25) {
       console.log(`[Billing] WARNING: ${tenantId} credit balance at ${Math.round(percentRemaining * 100)}%`);
     }
@@ -291,7 +477,7 @@ export class BillingService {
     const paymentLink = await getRazorpay().paymentLink.create({
       amount: plan.amount,
       currency: 'INR',
-      description: `VerifAI ${tier} Plan Subscription`,
+      description: `Veritas ${tier} Plan Subscription`,
       customer: {
         email: tenant.email,
         contact: contact,
@@ -306,7 +492,7 @@ export class BillingService {
         tier,
         subscriptionId: (subscription as any).id,
       },
-      callback_url: `${process.env.DASHBOARD_URL || 'http://localhost:3000'}/billing/success`,
+      callback_url: this.dashboardCallbackUrl('/billing/success'),
       callback_method: 'get',
     });
 
@@ -366,8 +552,8 @@ export class BillingService {
    * Generate UPI payment link for quick top-ups
    */
   async createUPIPayment(
-    tenantId: string, 
-    amountRs: number, 
+    tenantId: string,
+    amountRs: number,
     credits: number
   ): Promise<{ shortUrl: string; orderId: string }> {
     const tenant = await prisma.tenant.findUnique({ where: { tenantId } });
@@ -392,7 +578,7 @@ export class BillingService {
       } as any,
       notify: { email: true },
       notes: { tenantId, credits: credits.toString(), orderId: (order as any).id },
-      callback_url: `${process.env.DASHBOARD_URL || 'http://localhost:3000'}/billing/topup-success`,
+      callback_url: this.dashboardCallbackUrl('/billing/topup-success'),
       callback_method: 'get',
     });
 
@@ -404,6 +590,28 @@ export class BillingService {
    */
   getTierLimits(tier: keyof TierLimits): { requests: number; workers: number } {
     return TIER_LIMITS[tier];
+  }
+
+  private validatePositiveCreditAmount(amount: number, fieldName: string): number {
+    if (!Number.isFinite(amount)) {
+      throw new Error(`${fieldName} must be finite`);
+    }
+
+    const credits = Math.ceil(amount);
+    if (credits <= 0) {
+      throw new Error(`${fieldName} must be positive`);
+    }
+
+    return credits;
+  }
+
+  private dashboardCallbackUrl(path: string): string {
+    const dashboardUrl = process.env.DASHBOARD_URL;
+    if (dashboardUrl) return `${dashboardUrl.replace(/\/$/, '')}${path}`;
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('DASHBOARD_URL is required for billing callbacks in production');
+    }
+    return `http://localhost:3000${path}`;
   }
 }
 

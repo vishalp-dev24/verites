@@ -67,14 +67,14 @@ const RecentJobs = ({ jobs, loading = false }: RecentJobsProps) => {
     <div className="card">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-[var(--foreground)]">Recent Research Jobs</h3>
-        <Link 
-          href="/jobs" 
+        <Link
+          href="/jobs"
           className="text-sm text-[var(--primary)] hover:text-[var(--primary-hover)] transition-colors"
         >
           View all →
         </Link>
       </div>
-      
+
       <div className="table-container overflow-x-auto">
         <table className="table">
           <thead>
@@ -91,7 +91,7 @@ const RecentJobs = ({ jobs, loading = false }: RecentJobsProps) => {
             {jobs.map((job) => (
               <tr key={job.job_id} className="group cursor-pointer">
                 <td>
-                  <Link 
+                  <Link
                     href={`/jobs/${job.job_id}`}
                     className="font-mono text-xs text-[var(--primary)] hover:underline"
                   >

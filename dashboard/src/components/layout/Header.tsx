@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -9,11 +8,18 @@ interface HeaderProps {
   description?: string;
   children?: React.ReactNode;
   status?: 'healthy' | 'degraded' | 'unhealthy';
+  isMobileMenuOpen?: boolean;
+  onMobileMenuClick?: () => void;
 }
 
-const Header = ({ title, description, children, status = 'healthy' }: HeaderProps) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
+const Header = ({
+  title,
+  description,
+  children,
+  status = 'healthy',
+  isMobileMenuOpen = false,
+  onMobileMenuClick,
+}: HeaderProps) => {
   const statusStyles = {
     healthy: { bg: 'bg-emerald-500', pulse: 'animate-pulse-slow', text: 'text-emerald-400' },
     degraded: { bg: 'bg-amber-500', pulse: '', text: 'text-amber-400' },
@@ -34,11 +40,18 @@ const Header = ({ title, description, children, status = 'healthy' }: HeaderProp
           <div className="flex items-center gap-4">
             {/* Mobile Menu Button */}
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              type="button"
+              onClick={onMobileMenuClick}
+              aria-label={isMobileMenuOpen ? 'Close navigation' : 'Open navigation'}
+              aria-expanded={isMobileMenuOpen}
               className="lg:hidden p-2 -ml-2 text-[var(--foreground-muted)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--background-surface)]"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                {isMobileMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
               </svg>
             </button>
 

@@ -3,31 +3,34 @@
 import { cn } from '@/lib/utils';
 import { forwardRef } from 'react';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface FieldProps {
   label?: string;
   error?: string;
   helperText?: string;
+}
+
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement>, FieldProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ 
-    className, 
+  ({
+    className,
     label,
     error,
     helperText,
     leftIcon,
     rightIcon,
     id,
-    ...props 
+    ...props
   }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
-    
+
     return (
       <div className="w-full">
         {label && (
-          <label 
+          <label
             htmlFor={inputId}
             className="block text-sm font-medium text-[var(--foreground-muted)] mb-1.5"
           >
@@ -74,22 +77,26 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 Input.displayName = 'Input';
 
 // Textarea variant
-const Textarea = forwardRef<HTMLTextAreaElement, Omit<InputProps, 'leftIcon' | 'rightIcon'> & { rows?: number }>(
-  ({ 
-    className, 
+interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement>, FieldProps {
+  rows?: number;
+}
+
+const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({
+    className,
     label,
     error,
     helperText,
     id,
     rows = 4,
-    ...props 
+    ...props
   }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
-    
+
     return (
       <div className="w-full">
         {label && (
-          <label 
+          <label
             htmlFor={inputId}
             className="block text-sm font-medium text-[var(--foreground-muted)] mb-1.5"
           >
@@ -123,22 +130,26 @@ const Textarea = forwardRef<HTMLTextAreaElement, Omit<InputProps, 'leftIcon' | '
 Textarea.displayName = 'Textarea';
 
 // Select variant
-const Select = forwardRef<HTMLSelectElement, InputProps & { options: { value: string; label: string; disabled?: boolean }[] }>(
-  ({ 
-    className, 
+interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement>, FieldProps {
+  options: { value: string; label: string; disabled?: boolean }[];
+}
+
+const Select = forwardRef<HTMLSelectElement, SelectProps>(
+  ({
+    className,
     label,
     error,
     helperText,
     id,
     options,
-    ...props 
+    ...props
   }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
-    
+
     return (
       <div className="w-full">
         {label && (
-          <label 
+          <label
             htmlFor={inputId}
             className="block text-sm font-medium text-[var(--foreground-muted)] mb-1.5"
           >
@@ -156,8 +167,8 @@ const Select = forwardRef<HTMLSelectElement, InputProps & { options: { value: st
           {...props}
         >
           {options.map((option) => (
-            <option 
-              key={option.value} 
+            <option
+              key={option.value}
               value={option.value}
               disabled={option.disabled}
             >

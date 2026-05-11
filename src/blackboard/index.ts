@@ -1,6 +1,6 @@
 /**
  * Blackboard - Collaborative Knowledge Store
- * 
+ *
  * Based on blackboard pattern where multiple workers
  * contribute facts that are consolidated and validated
  */
@@ -143,13 +143,17 @@ export class Blackboard {
 
 // Singleton for non-job-specific operations
 export const blackboard = {
+  asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  },
+
   async get(jobId: string): Promise<Record<string, unknown> | null> {
     // Get from Redis
     const data = await redis.get(`blackboard${jobId}:data`);
     if (data) {
       return JSON.parse(data);
     }
-    
+
     // Fallback to Prisma
     const record = await prisma.researchJob.findUnique({
       where: { jobId },
@@ -159,7 +163,7 @@ export const blackboard = {
 
   async set(jobId: string, data: Record<string, unknown>): Promise<void> {
     await redis.setex(`blackboard${jobId}:data`, 3600, JSON.stringify(data));
-    
+
     await prisma.researchJob.update({
       where: { jobId },
       data: { data: data as object },
@@ -175,12 +179,44 @@ export const blackboard = {
   async appendFact(jobId: string, fact: unknown): Promise<void> {
     const factsKey = `blackboard${jobId}:facts`;
     await redis.lpush(factsKey, JSON.stringify(fact));
+
+    const updatedAt = new Date().toISOString();
+    await prisma.$executeRaw`
+      UPDATE "research_jobs"
+      SET "data" = jsonb_set(
+        jsonb_set(
+          COALESCE("data", '{}'::jsonb),
+          '{facts}',
+          ${JSON.stringify([fact])}::jsonb || COALESCE("data"->'facts', '[]'::jsonb),
+          true
+        ),
+        '{updatedAt}',
+        to_jsonb(${updatedAt}::text),
+        true
+      )
+      WHERE "job_id" = ${jobId}
+    `;
+
+    const record = await prisma.researchJob.findUnique({
+      where: { jobId },
+      select: { data: true },
+    });
+    await redis.setex(`blackboard${jobId}:data`, 3600, JSON.stringify(record?.data || { facts: [fact], updatedAt }));
   },
 
   async getFacts(jobId: string): Promise<Fact[]> {
     const factsKey = `blackboard${jobId}:facts`;
     const facts = await redis.lrange(factsKey, 0, -1);
-    return facts.map((f: string) => JSON.parse(f) as Fact);
+    if (facts.length > 0) {
+      return facts.map((f: string) => JSON.parse(f) as Fact);
+    }
+
+    const record = await prisma.researchJob.findUnique({
+      where: { jobId },
+      select: { data: true },
+    });
+    const data = this.asRecord(record?.data);
+    return Array.isArray(data.facts) ? data.facts as Fact[] : [];
   },
 
   async getJobState(jobId: string): Promise<{ verifiedFacts: Fact[] } | null> {

@@ -1,6 +1,8 @@
 # Multi-stage build for Veritas API
 FROM node:22-alpine AS base
 
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 # Install build dependencies
 RUN apk add --no-cache \
   python3 \
@@ -29,10 +31,19 @@ RUN npm run build
 # Production stage - minimal image
 FROM node:22-alpine AS production
 
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Install runtime dependencies
 RUN apk add --no-cache \
   dumb-init \
-  openssl
+  openssl \
+  chromium \
+  nss \
+  freetype \
+  harfbuzz \
+  ca-certificates \
+  ttf-freefont
 
 WORKDIR /app
 

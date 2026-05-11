@@ -1,7 +1,7 @@
 
 /**
  * Veritas Orchestrator Module
- * 
+ *
  * Exports:
  * - orchestratorExecutor: Main doubt loop executor
  * - analyzeForDoubts: Analyze findings for gaps

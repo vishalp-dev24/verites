@@ -5,19 +5,25 @@
 
 import { delay } from './utils';
 import type {
+  ApiKey,
   ApiResponse,
+  CreditInfo,
   DashboardStats,
+  HealthStatus,
+  JobStatus,
   ResearchJob,
+  ResearchMode,
   ResearchRequest,
   ResearchResponse,
-  CreditInfo,
-  UsageBreakdown,
   SecurityEvent,
-  ApiKey,
-  HealthStatus,
+  UsageBreakdown,
 } from '../types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+function getApiBase(): string {
+  return '/api/backend';
+}
+
+const API_BASE = getApiBase();
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
@@ -25,30 +31,42 @@ interface RequestConfig extends RequestInit {
   retries?: number;
 }
 
-/**
- * Check if API key is set
- */
-function hasApiKey(): boolean {
-  if (typeof window === 'undefined') return false;
-  return !!localStorage.getItem('apiKey');
-}
+type BackendRecord = Record<string, unknown>;
 
 /**
  * Get API headers
  */
-function getHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
+function getHeaders(): Headers {
+  return new Headers({
     'Content-Type': 'application/json',
-  };
-  
-  if (typeof window !== 'undefined') {
-    const apiKey = localStorage.getItem('apiKey');
-    if (apiKey) {
-      headers['X-API-Key'] = apiKey;
-    }
+    'X-Veritas-Dashboard-Request': '1',
+  });
+}
+
+function mergeHeaders(headers?: HeadersInit): Headers {
+  const merged = getHeaders();
+
+  if (headers) {
+    new Headers(headers).forEach((value, key) => {
+      merged.set(key, value);
+    });
   }
-  
-  return headers;
+
+  return merged;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const defaultMessage = `HTTP ${response.status}: ${response.statusText}`;
+  const text = await response.text();
+
+  if (!text) return defaultMessage;
+
+  try {
+    const errorData = JSON.parse(text) as { message?: unknown; error?: unknown };
+    return asString(errorData.message) || asString(errorData.error) || defaultMessage;
+  } catch {
+    return text;
+  }
 }
 
 /**
@@ -59,61 +77,231 @@ async function fetchWithRetry<T>(
   config: RequestConfig = {}
 ): Promise<ApiResponse<T>> {
   const { retries = MAX_RETRIES, ...fetchConfig } = config;
-  
+
   try {
     const response = await fetch(url, {
       ...fetchConfig,
-      headers: {
-        ...getHeaders(),
-        ...fetchConfig.headers,
-      },
+      headers: mergeHeaders(fetchConfig.headers),
     });
 
     // Handle rate limiting with retry
     if (response.status === 429 && retries > 0) {
-      const retryAfter = response.headers.get('Retry-After');
-      const delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : RETRY_DELAY;
+      const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '', 10);
+      const delayMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : RETRY_DELAY;
       await delay(delayMs);
-      return fetchWithRetry(url, { ...config, retries: retries - 1 });
+      return fetchWithRetry(url, { ...fetchConfig, retries: retries - 1 });
     }
 
     // Handle server errors with retry
     if (response.status >= 500 && retries > 0) {
       await delay(RETRY_DELAY);
-      return fetchWithRetry(url, { ...config, retries: retries - 1 });
+      return fetchWithRetry(url, { ...fetchConfig, retries: retries - 1 });
     }
 
     if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-      
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorData.error || errorMessage;
-      } catch {
-        // Use default error message if JSON parsing fails
-      }
-      
-      return { error: errorMessage };
+      return { error: await readErrorMessage(response) };
     }
 
-    const data = await response.json();
-    return { data };
+    const text = await response.text();
+    if (!text) return { data: undefined as T };
+
+    try {
+      return { data: JSON.parse(text) as T };
+    } catch {
+      return { error: 'Invalid JSON response from API' };
+    }
   } catch (error) {
     if (retries > 0) {
       await delay(RETRY_DELAY);
-      return fetchWithRetry(url, { ...config, retries: retries - 1 });
+      return fetchWithRetry(url, { ...fetchConfig, retries: retries - 1 });
     }
-    
-    return { 
-      error: error instanceof Error ? error.message : 'Network error. Please check your connection.' 
+
+    return {
+      error: error instanceof Error ? error.message : 'Network error. Please check your connection.',
     };
   }
+}
+
+function asRecord(value: unknown): BackendRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as BackendRecord : {};
+}
+
+function asString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function asOptionalNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = asNumber(value, Number.NaN);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeDate(value: unknown, fallback = new Date(0).toISOString()): string {
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  return fallback;
+}
+
+function normalizeStatus(status: unknown): JobStatus {
+  switch (asString(status).toLowerCase()) {
+    case 'complete':
+    case 'completed':
+    case 'success':
+    case 'partial':
+      return 'complete';
+    case 'processing':
+    case 'researching':
+    case 'running':
+      return 'processing';
+    case 'queued':
+    case 'planning':
+      return 'queued';
+    case 'cancelled':
+    case 'canceled':
+      return 'cancelled';
+    case 'failed':
+    case 'error':
+    case 'rejected':
+      return 'failed';
+    case 'pending':
+    default:
+      return 'pending';
+  }
+}
+
+function normalizeMode(mode: unknown): ResearchMode {
+  const value = asString(mode).toLowerCase();
+  if (value === 'lite' || value === 'medium' || value === 'deep') return value;
+  return 'medium';
+}
+
+function sourceCountFrom(rawJob: BackendRecord): number | undefined {
+  const data = asRecord(rawJob.data);
+  const sources = rawJob.sources ?? data.sources;
+  return Array.isArray(sources) ? sources.length : undefined;
+}
+
+function normalizeJob(rawJob: BackendRecord): ResearchJob {
+  const error = asString(rawJob.error ?? rawJob.errorMessage);
+
+  return {
+    job_id: asString(rawJob.job_id ?? rawJob.jobId ?? rawJob.id),
+    session_id: asString(rawJob.session_id ?? rawJob.sessionId),
+    query: asString(rawJob.query),
+    mode: normalizeMode(rawJob.mode),
+    status: normalizeStatus(rawJob.status),
+    confidence_score: asOptionalNumber(rawJob.confidence_score ?? rawJob.confidenceScore) ?? null,
+    credits_used: asNumber(rawJob.credits_used ?? rawJob.creditsUsed),
+    created_at: normalizeDate(rawJob.created_at ?? rawJob.createdAt),
+    completed_at: rawJob.completed_at || rawJob.completedAt
+      ? normalizeDate(rawJob.completed_at ?? rawJob.completedAt)
+      : undefined,
+    started_at: rawJob.started_at || rawJob.startedAt
+      ? normalizeDate(rawJob.started_at ?? rawJob.startedAt)
+      : undefined,
+    error: error || undefined,
+    sources_count: sourceCountFrom(rawJob),
+    estimated_time: asOptionalNumber(rawJob.estimated_time ?? rawJob.estimatedTime),
+  };
+}
+
+function defaultEstimatedSeconds(mode: ResearchMode): number {
+  return {
+    lite: 30,
+    medium: 180,
+    deep: 480,
+  }[mode];
+}
+
+function createSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `dashboard_${crypto.randomUUID()}`;
+  }
+
+  return `dashboard_${Date.now().toString(36)}`;
+}
+
+function normalizeResearchRequest(request: ResearchRequest): BackendRecord {
+  const sessionId = request.session_id?.trim() || createSessionId();
+  const outputSchema = request.output_schema ?? {
+    type: 'object',
+    properties: {
+      summary: { type: 'string' },
+      key_facts: {
+        type: 'array',
+        items: { type: 'string' },
+      },
+      sources: {
+        type: 'array',
+        items: { type: 'string' },
+      },
+    },
+  };
+
+  return {
+    query: request.query.trim(),
+    mode: request.mode,
+    session_id: sessionId,
+    output_schema: outputSchema,
+  };
+}
+
+function normalizeResearchResponse(
+  rawResponse: BackendRecord,
+  mode: ResearchMode
+): ResearchResponse | null {
+  const jobId = asString(rawResponse.job_id ?? rawResponse.jobId);
+  if (!jobId) return null;
+
+  const estimatedCompletionMs = asOptionalNumber(rawResponse.estimated_completion_ms);
+  const estimatedTime =
+    asOptionalNumber(rawResponse.estimated_time ?? rawResponse.estimatedTime ?? rawResponse.estimated_time_seconds) ??
+    (estimatedCompletionMs ? Math.ceil(estimatedCompletionMs / 1000) : defaultEstimatedSeconds(mode));
+
+  return {
+    job_id: jobId,
+    status: normalizeStatus(rawResponse.status),
+    estimated_time: estimatedTime,
+    position_in_queue: asOptionalNumber(rawResponse.position_in_queue ?? rawResponse.positionInQueue),
+  };
+}
+
+function tierName(tier: string): string {
+  if (!tier) return 'Unknown';
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
 // ==================== Dashboard ====================
 
 export async function getDashboardStats(): Promise<ApiResponse<DashboardStats>> {
-  return fetchWithRetry(`${API_BASE}/api/stats`);
+  const response = await fetchWithRetry<BackendRecord>(`${API_BASE}/v1/stats`);
+  if (response.error || !response.data) return { error: response.error || 'Dashboard stats unavailable' };
+
+  const stats = response.data;
+  return {
+    data: {
+      total_jobs: asNumber(stats.total_jobs ?? stats.totalJobs),
+      jobs_today: asNumber(stats.jobs_today ?? stats.jobsToday),
+      active_jobs: asNumber(stats.active_jobs ?? stats.activeJobs),
+      credits_remaining: asNumber(stats.credits_remaining ?? stats.creditsRemaining),
+      credits_used_this_month: asNumber(stats.credits_used_this_month ?? stats.creditsUsedThisMonth),
+      avg_research_time: asNumber(stats.avg_research_time ?? stats.avgResearchTime),
+      queue_length: asNumber(stats.queue_length ?? stats.queueLength),
+      cache_hit_rate: asNumber(stats.cache_hit_rate ?? stats.cacheHitRate),
+      active_sessions: asNumber(stats.active_sessions ?? stats.activeSessions),
+    },
+  };
 }
 
 // ==================== Jobs ====================
@@ -123,17 +311,47 @@ export async function getJobs(
   limit = 20,
   status?: string
 ): Promise<ApiResponse<{ jobs: ResearchJob[]; total: number; page: number; totalPages: number }>> {
-  const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
-  if (status) params.append('status', status);
-  return fetchWithRetry(`${API_BASE}/api/jobs?${params}`);
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (status && status !== 'all') params.set('status', status);
+
+  const response = await fetchWithRetry<BackendRecord[] | { jobs?: BackendRecord[]; total?: number; page?: number; totalPages?: number }>(
+    `${API_BASE}/v1/jobs?${params.toString()}`
+  );
+  if (response.error || !response.data) return { error: response.error || 'Jobs unavailable' };
+
+  const rawJobs = Array.isArray(response.data) ? response.data : response.data.jobs || [];
+  const normalizedJobs = rawJobs.map(normalizeJob);
+  const filteredJobs = Array.isArray(response.data) && status
+    ? normalizedJobs.filter((job) => job.status === normalizeStatus(status))
+    : normalizedJobs;
+  const safeLimit = Math.max(1, limit);
+  const safePage = Math.max(1, page);
+  const start = (safePage - 1) * safeLimit;
+  const jobs = Array.isArray(response.data) ? filteredJobs.slice(start, start + safeLimit) : filteredJobs;
+
+  return {
+    data: {
+      jobs,
+      total: Array.isArray(response.data) ? filteredJobs.length : asNumber(response.data.total, filteredJobs.length),
+      page: Array.isArray(response.data) ? safePage : asNumber(response.data.page, safePage),
+      totalPages: Array.isArray(response.data)
+        ? Math.max(1, Math.ceil(filteredJobs.length / safeLimit))
+        : asNumber(response.data.totalPages, Math.max(1, Math.ceil(filteredJobs.length / safeLimit))),
+    },
+  };
 }
 
 export async function getJob(jobId: string): Promise<ApiResponse<ResearchJob>> {
-  return fetchWithRetry(`${API_BASE}/api/jobs/${jobId}`);
+  const response = await fetchWithRetry<BackendRecord>(`${API_BASE}/v1/research/${encodeURIComponent(jobId)}`);
+  if (response.error || !response.data) return { error: response.error || 'Job unavailable' };
+  return { data: normalizeJob(response.data) };
 }
 
 export async function cancelJob(jobId: string): Promise<ApiResponse<void>> {
-  return fetchWithRetry(`${API_BASE}/api/jobs/${jobId}/cancel`, {
+  return fetchWithRetry<void>(`${API_BASE}/v1/jobs/${encodeURIComponent(jobId)}/cancel`, {
     method: 'POST',
   });
 }
@@ -143,26 +361,54 @@ export async function cancelJob(jobId: string): Promise<ApiResponse<void>> {
 export async function createResearch(
   request: ResearchRequest
 ): Promise<ApiResponse<ResearchResponse>> {
-  return fetchWithRetry(`${API_BASE}/api/research`, {
+  const response = await fetchWithRetry<BackendRecord>(`${API_BASE}/v1/research`, {
     method: 'POST',
-    body: JSON.stringify(request),
+    body: JSON.stringify(normalizeResearchRequest(request)),
   });
+
+  if (response.error || !response.data) return { error: response.error || 'Research request failed' };
+
+  const data = normalizeResearchResponse(response.data, request.mode);
+  return data ? { data } : { error: 'Research endpoint did not return a job id' };
 }
 
 export async function getResearchResult(jobId: string): Promise<ApiResponse<ResearchJob>> {
-  return fetchWithRetry(`${API_BASE}/api/research/${jobId}/result`);
+  return getJob(jobId);
 }
 
 // ==================== Credits ====================
 
 export async function getCredits(): Promise<ApiResponse<CreditInfo>> {
-  return fetchWithRetry(`${API_BASE}/api/credits`);
+  const response = await fetchWithRetry<BackendRecord>(`${API_BASE}/v1/usage`);
+  if (response.error || !response.data) return { error: response.error || 'Credit usage unavailable' };
+
+  const usage = response.data;
+  const tier = asString(usage.tier, 'unknown');
+
+  return {
+    data: {
+      balance: asNumber(usage.creditsBalance ?? usage.credits_balance),
+      used_this_month: asNumber(usage.creditsUsed ?? usage.credits_used),
+      tier,
+      tier_name: tierName(tier),
+    },
+  };
 }
 
 export async function getUsageBreakdown(
   days = 30
 ): Promise<ApiResponse<UsageBreakdown[]>> {
-  return fetchWithRetry(`${API_BASE}/api/credits/usage?days=${days}`);
+  const response = await fetchWithRetry<BackendRecord[]>(`${API_BASE}/v1/usage/breakdown?days=${days}`);
+  if (response.error || !response.data) return { error: response.error || 'Usage breakdown unavailable' };
+
+  return {
+    data: response.data.map((item) => ({
+      mode: normalizeMode(item.mode),
+      requests: asNumber(item.requests),
+      credits_used: asNumber(item.credits_used ?? item.creditsUsed),
+      avg_credits_per_request: asNumber(item.avg_credits_per_request ?? item.avgCreditsPerRequest),
+    })),
+  };
 }
 
 // ==================== Security ====================
@@ -171,58 +417,125 @@ export async function getSecurityEvents(
   page = 1,
   limit = 50
 ): Promise<ApiResponse<{ events: SecurityEvent[]; total: number }>> {
-  return fetchWithRetry(`${API_BASE}/api/security/events?page=${page}&limit=${limit}`);
+  const response = await fetchWithRetry<{ events?: BackendRecord[]; total?: number }>(
+    `${API_BASE}/v1/security/events?page=${page}&limit=${limit}`
+  );
+  if (response.error || !response.data) return { error: response.error || 'Security events unavailable' };
+
+  return {
+    data: {
+      total: asNumber(response.data.total),
+      events: (response.data.events || []).map((event) => ({
+        id: asString(event.id),
+        type: asString(event.type),
+        risk_score: asNumber(event.risk_score ?? event.riskScore),
+        source_url: asString(event.source_url ?? event.sourceUrl) || undefined,
+        action: ['blocked', 'quarantined', 'allowed', 'flagged'].includes(asString(event.action))
+          ? asString(event.action) as SecurityEvent['action']
+          : 'flagged',
+        timestamp: normalizeDate(event.timestamp),
+        details: asRecord(event.details),
+      })),
+    },
+  };
 }
 
 // ==================== API Keys ====================
 
 export async function getApiKeys(): Promise<ApiResponse<ApiKey[]>> {
-  return fetchWithRetry(`${API_BASE}/api/keys`);
+  const response = await fetchWithRetry<BackendRecord[]>(`${API_BASE}/v1/api-keys`);
+  if (response.error || !response.data) return { error: response.error || 'API keys unavailable' };
+
+  return {
+    data: response.data.map((key) => ({
+      id: asString(key.id),
+      name: asString(key.name),
+      key_preview: asString(key.key_preview ?? key.keyPreview),
+      created_at: normalizeDate(key.created_at ?? key.createdAt),
+      last_used_at: key.last_used_at || key.lastUsedAt
+        ? normalizeDate(key.last_used_at ?? key.lastUsedAt)
+        : undefined,
+      usage_count: asNumber(key.usage_count ?? key.usageCount),
+      status: ['active', 'revoked', 'expired'].includes(asString(key.status))
+        ? asString(key.status) as ApiKey['status']
+        : 'active',
+      permissions: Array.isArray(key.permissions) ? key.permissions.map((item) => asString(item)) : [],
+    })),
+  };
 }
 
 export async function createApiKey(
   name: string,
   permissions: string[] = ['read', 'write']
 ): Promise<ApiResponse<ApiKey & { full_key: string }>> {
-  return fetchWithRetry(`${API_BASE}/api/keys`, {
+  const response = await fetchWithRetry<BackendRecord>(`${API_BASE}/v1/api-keys`, {
     method: 'POST',
     body: JSON.stringify({ name, permissions }),
   });
+  if (response.error || !response.data) return { error: response.error || 'API key creation failed' };
+
+  const key = response.data;
+  return {
+    data: {
+      id: asString(key.id),
+      name: asString(key.name),
+      key_preview: asString(key.key_preview ?? key.keyPreview),
+      created_at: normalizeDate(key.created_at ?? key.createdAt),
+      last_used_at: key.last_used_at || key.lastUsedAt
+        ? normalizeDate(key.last_used_at ?? key.lastUsedAt)
+        : undefined,
+      usage_count: asNumber(key.usage_count ?? key.usageCount),
+      status: ['active', 'revoked', 'expired'].includes(asString(key.status))
+        ? asString(key.status) as ApiKey['status']
+        : 'active',
+      permissions: Array.isArray(key.permissions) ? key.permissions.map((item) => asString(item)) : permissions,
+      full_key: asString(key.full_key ?? key.fullKey),
+    },
+  };
 }
 
 export async function revokeApiKey(keyId: string): Promise<ApiResponse<void>> {
-  return fetchWithRetry(`${API_BASE}/api/keys/${keyId}`, {
+  return fetchWithRetry<void>(`${API_BASE}/v1/api-keys/${encodeURIComponent(keyId)}`, {
     method: 'DELETE',
   });
 }
 
 // ==================== Health ====================
 
-export async function healthCheck(): Promise<ApiResponse<HealthStatus>> {
-  return fetchWithRetry(`${API_BASE}/health`);
+function normalizeServiceStatus(value: unknown, fallback: 'connected' | 'disconnected'): 'connected' | 'disconnected' {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === 'connected' || normalized === 'healthy' || normalized === 'ok') return 'connected';
+  if (normalized === 'disconnected' || normalized === 'unhealthy' || normalized === 'error') return 'disconnected';
+  return fallback;
 }
 
-// ==================== Local Storage ====================
+export async function healthCheck(): Promise<ApiResponse<HealthStatus>> {
+  const response = await fetchWithRetry<BackendRecord>(`${API_BASE}/health`);
+  if (response.error || !response.data) return { error: response.error || 'Health check unavailable' };
 
-export const apiKeyStorage = {
-  set: (key: string): void => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('apiKey', key);
-    }
-  },
-  
-  get: (): string | null => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('apiKey');
-    }
-    return null;
-  },
-  
-  clear: (): void => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('apiKey');
-    }
-  },
-  
-  has: (): boolean => hasApiKey(),
-};
+  const health = response.data;
+  const rawStatus = asString(health.status).toLowerCase();
+  const status: HealthStatus['status'] =
+    rawStatus === 'healthy' || rawStatus === 'ok'
+      ? 'healthy'
+      : rawStatus === 'degraded'
+        ? 'degraded'
+        : 'unhealthy';
+  const defaultServiceStatus = status === 'healthy' ? 'connected' : 'disconnected';
+  const services = asRecord(health.services);
+
+  return {
+    data: {
+      status,
+      version: asString(health.version, 'unknown'),
+      timestamp: asString(health.timestamp, new Date().toISOString()),
+      uptime: asNumber(health.uptime),
+      services: {
+        database: normalizeServiceStatus(services.database, defaultServiceStatus),
+        redis: normalizeServiceStatus(services.redis, defaultServiceStatus),
+        search: normalizeServiceStatus(services.search, defaultServiceStatus),
+        llm: normalizeServiceStatus(services.llm, defaultServiceStatus),
+      },
+    },
+  };
+}

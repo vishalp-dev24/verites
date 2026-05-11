@@ -11,12 +11,12 @@ interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
-  ({ 
-    className, 
+  ({
+    className,
     variant = 'default',
     size = 'md',
     children,
-    ...props 
+    ...props
   }, ref) => {
     const variants: Record<BadgeVariant, string> = {
       default: 'badge-default',

@@ -109,7 +109,7 @@ export async function analyzeForDoubts(
  */
 function detectThinCoverage(findings: Finding[], mode: string): Doubt[] {
   const doubts: Doubt[] = [];
-  
+
   const minSources = mode === 'deep' ? 4 : mode === 'medium' ? 2 : 1;
 
   for (const finding of findings) {
@@ -146,7 +146,7 @@ async function detectContradictions(findings: Finding[]): Promise<Doubt[]> {
       const f2 = findings[j];
 
       const contradiction = await checkContradiction(f1, f2);
-      
+
       if (contradiction.exists) {
         doubts.push({
           id: `doubt_contradiction_${Date.now()}_${i}_${j}`,
@@ -166,9 +166,9 @@ async function detectContradictions(findings: Finding[]): Promise<Doubt[]> {
   return doubts;
 }
 
-async function checkContradiction(f1: Finding, f2: Finding): Promise<{ 
-  exists: boolean; 
-  severity: string; 
+async function checkContradiction(f1: Finding, f2: Finding): Promise<{
+  exists: boolean;
+  severity: string;
   description: string;
   confidence: number;
 }> {
@@ -195,7 +195,7 @@ Return JSON: {"contradiction": true/false, "severity": "critical/high/medium/non
       description: result.description || '',
       confidence: result.confidence || 0.5,
     };
-  } catch (err) {
+  } catch {
     // Fallback: simple string similarity check
     const similarity = calculateSimilarity(f1.content, f2.content);
     if (similarity < 0.3) {
@@ -268,7 +268,7 @@ Return empty array [] if coverage seems complete.`;
       reason: 'coverage_gap',
       confidence: 0.7,
     }));
-  } catch (err) {
+  } catch {
     return [];
   }
 }
@@ -309,7 +309,7 @@ function calculateOverallConfidence(findings: Finding[], doubts: Doubt[]): numbe
   if (findings.length === 0) return 0;
 
   const avgFindingConfidence = findings.reduce((sum, f) => sum + f.confidence, 0) / findings.length;
-  
+
   // Reduce confidence based on doubts
   const criticalPenalty = doubts.filter(d => d.severity === 'critical').length * 0.2;
   const highPenalty = doubts.filter(d => d.severity === 'high').length * 0.1;
@@ -320,7 +320,7 @@ function calculateOverallConfidence(findings: Finding[], doubts: Doubt[]): numbe
 
 function calculateCoverageScore(query: string, findings: Finding[]): number {
   if (findings.length === 0) return 0;
-  
+
   // Simple heuristic: more findings = better coverage, but diminishing returns
   const idealCount = 5;
   const ratio = Math.min(findings.length / idealCount, 1);

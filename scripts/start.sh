@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick start script for Veritas
+# Quick start script for Veritas local development
 
 set -e
 
@@ -56,7 +56,7 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}Starting Veritas services...${NC}"
+echo -e "${BLUE}Starting Veritas local development services...${NC}"
 echo ""
 
 # Stop any existing containers
@@ -76,7 +76,7 @@ echo -e "${GREEN}✓ PostgreSQL is ready${NC}"
 
 # Wait for Redis
 echo -e "${YELLOW}→ Waiting for Redis...${NC}"
-until docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; do
+until docker-compose exec -T redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping' > /dev/null 2>&1; do
     sleep 1
 done
 echo -e "${GREEN}✓ Redis is ready${NC}"

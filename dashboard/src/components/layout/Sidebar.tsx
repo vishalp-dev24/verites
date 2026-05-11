@@ -11,6 +11,11 @@ interface NavItem {
   badge?: number;
 }
 
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
 const navigation: NavItem[] = [
   {
     label: 'Dashboard',
@@ -60,14 +65,20 @@ const navigation: NavItem[] = [
   },
 ];
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen = false, onClose }: SidebarProps) => {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-[var(--background-elevated)] border-r border-[var(--border)] flex flex-col h-screen fixed left-0 top-0 z-40">
-      {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-[var(--border)]">
-        <Link href="/" className="flex items-center gap-3 group">
+    <aside
+      className={cn(
+        'w-64 bg-[var(--background-elevated)] border-r border-[var(--border)] flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-200 ease-out',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+        'lg:translate-x-0'
+      )}
+      aria-label="Primary navigation"
+    >
+      <div className="h-16 flex items-center justify-between px-6 border-b border-[var(--border)]">
+        <Link href="/" className="flex items-center gap-3 group" onClick={onClose}>
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--info)] flex items-center justify-center">
             <span className="text-white font-bold text-sm">V</span>
           </div>
@@ -75,18 +86,28 @@ const Sidebar = () => {
             Veritas
           </span>
         </Link>
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="lg:hidden p-2 -mr-2 text-[var(--foreground-muted)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--background-surface)]"
+          onClick={onClose}
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-3 py-4">
         <ul className="space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            
+            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={onClose}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                     isActive
@@ -94,10 +115,7 @@ const Sidebar = () => {
                       : 'text-[var(--foreground-muted)] hover:bg-[var(--background-surface-hover)] hover:text-[var(--foreground)]'
                   )}
                 >
-                  <span className={cn(
-                    'transition-colors',
-                    isActive && 'text-[var(--primary)]'
-                  )}>
+                  <span className={cn('transition-colors', isActive && 'text-[var(--primary)]')}>
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
@@ -112,38 +130,6 @@ const Sidebar = () => {
           })}
         </ul>
       </nav>
-
-      {/* Credits */}
-      <div className="p-4 border-t border-[var(--border)]">
-        <div className="bg-[var(--background-surface)] rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-[var(--foreground-muted)]">Credits</span>
-            <span className="text-sm font-semibold text-[var(--foreground)]">1,240</span>
-          </div>
-          <div className="w-full bg-[var(--background-subtle)] rounded-full h-1.5 mb-3">
-            <div className="bg-[var(--primary)] h-1.5 rounded-full" style={{ width: '62%' }} />
-          </div>
-          <Link
-            href="/settings#billing"
-            className="w-full text-center text-xs text-[var(--foreground-subtle)] hover:text-[var(--foreground)] transition-colors"
-          >
-            View usage →
-          </Link>
-        </div>
-      </div>
-
-      {/* User */}
-      <div className="p-4 border-t border-[var(--border)]">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[var(--background-surface)] flex items-center justify-center border border-[var(--border)]">
-            <span className="text-sm font-medium text-[var(--foreground)]">U</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[var(--foreground)] truncate">User</p>
-            <p className="text-xs text-[var(--foreground-subtle)] truncate">Developer Plan</p>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 };

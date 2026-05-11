@@ -68,9 +68,7 @@ scripts/dev*.sh
 compose.override.yml
 docker-compose.override.yml
 
-# Prisma - don't need migrations in build
-# (run them as separate step)
-prisma/migrations
+# Prisma migrations must be available for image-based migrate deploy.
 
 # Large files
 *.mp4

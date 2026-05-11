@@ -13,12 +13,12 @@ interface StatCardProps {
   loading?: boolean;
 }
 
-const StatCard = ({ 
-  title, 
-  value, 
-  subtitle, 
+const StatCard = ({
+  title,
+  value,
+  subtitle,
   trend,
-  icon, 
+  icon,
   color,
   loading = false,
 }: StatCardProps) => {
@@ -64,10 +64,10 @@ const StatCard = ({
             'flex items-center gap-1 text-xs font-medium',
             trend.isPositive ? 'text-emerald-400' : 'text-red-400'
           )}>
-            <svg 
-              className={cn('w-3 h-3', !trend.isPositive && 'rotate-180')} 
-              fill="none" 
-              viewBox="0 0 24 24" 
+            <svg
+              className={cn('w-3 h-3', !trend.isPositive && 'rotate-180')}
+              fill="none"
+              viewBox="0 0 24 24"
               stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
@@ -76,7 +76,7 @@ const StatCard = ({
           </div>
         )}
       </div>
-      
+
       <div className="mt-4">
         <p className="text-2xl font-semibold text-[var(--foreground)]">
           {typeof value === 'number' ? formatNumber(value) : value}

@@ -1,9 +1,13 @@
 
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'export',
   distDir: 'dist',
+  turbopack: {
+    root: path.join(__dirname, '..'),
+  },
   images: {
     unoptimized: true,
   },

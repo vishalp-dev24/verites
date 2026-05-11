@@ -266,12 +266,6 @@ export class PlanningLayer {
     const hash = require('crypto').createHash('sha256');
     hash.update(request.query);
     hash.update(request.mode);
-    if (request.domain_whitelist) {
-      hash.update(request.domain_whitelist.join(','));
-    }
-    if (request.domain_blacklist) {
-      hash.update(request.domain_blacklist.join(','));
-    }
     return hash.digest('hex').substring(0, 32);
   }
 

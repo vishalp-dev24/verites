@@ -32,10 +32,10 @@ export class SemanticCacheService {
   async generateFingerprint(query: string, mode: string): Promise<string> {
     // Get embedding for semantic similarity
     const embedding = await this.getEmbedding(query);
-    
+
     // Quantize to reduce size
     const quantized = this.quantize(embedding);
-    
+
     // Create hash
     const hash = createHash('sha256')
       .update(JSON.stringify(quantized) + mode)
@@ -54,14 +54,14 @@ export class SemanticCacheService {
     threshold = 0.85
   ): Promise<{ hit: boolean; data?: unknown; sources?: unknown[]; age?: number; similarity?: number }> {
     const queryEmbedding = await this.getEmbedding(query);
-    
+
     if (!queryEmbedding.length) {
       return { hit: false };
     }
 
     // Get all cache entries with embeddings from Redis
     const keys = await semanticCache.keys('embedding:*');
-    
+
     for (const key of keys) {
       const fingerprint = key.replace('cache:embedding:', '');
       const cached = await semanticCache.get(fingerprint);
@@ -243,10 +243,10 @@ export class SemanticCacheService {
       });
 
       const embedding = response.data[0].embedding;
-      
+
       // Cache for reuse
       this.embeddingCache.set(text, embedding);
-      
+
       // Limit cache size
       if (this.embeddingCache.size > 1000) {
         const firstKey = this.embeddingCache.keys().next().value;
@@ -264,7 +264,7 @@ export class SemanticCacheService {
     // Reduce to 128 dimensions for fingerprinting
     const step = Math.floor(embedding.length / 128);
     const quantized: number[] = [];
-    
+
     for (let i = 0; i < 128; i++) {
       const idx = i * step;
       quantized.push(Math.round(embedding[idx] * 100) / 100);
