@@ -1,6 +1,6 @@
 # Veritas
 
-MCP research backend for AI agents. Web search, trust scoring, session memory, REST APIs, SDKs, and dashboard.
+Research backend for AI agents. Use it as an MCP server, REST API, SDK, or LangChain tool when an agent needs source-checked web research.
 
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
@@ -25,6 +25,7 @@ MCP research backend for AI agents. Web search, trust scoring, session memory, R
 ### AI Agent Integration
 
 - **MCP server** - Native Model Context Protocol support.
+- **LangChain tool** - Drop Veritas into LangChain agents for source-checked research.
 - **REST API** - API key authentication for application access.
 - **SDKs** - JavaScript and Python clients.
 - **Structured output** - JSON, briefings, and custom schemas.
@@ -67,6 +68,16 @@ curl http://localhost:3000/health
 ```
 
 **[Full Setup Guide](./SETUP.md)** - Prerequisites, manual setup, troubleshooting
+
+---
+
+## Agent Tooling
+
+Veritas can be used as a custom LangChain tool when an agent needs current research instead of a raw model answer.
+
+- [LangChain integration](./docs/LANGCHAIN.md)
+- [JavaScript LangChain example](./examples/langchain-js/veritas-research-tool.ts)
+- [Python LangChain example](./examples/langchain-python/veritas_research_tool.py)
 
 ---
 

@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="veritas",
     version="1.0.0",
-    description="Veritas — MCP-native research intelligence platform Python SDK",
+    description="Python SDK for using Veritas research in AI agents",
     author="Veritas",
     author_email="support@veritas.research",
     packages=find_packages(),

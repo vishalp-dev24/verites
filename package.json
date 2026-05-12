@@ -1,7 +1,7 @@
 {
   "name": "veritas",
   "version": "1.0.0",
-  "description": "Veritas — MCP-native research intelligence platform for AI agents",
+  "description": "Research backend and tool interface for AI agents",
   "main": "dist/app.js",
   "type": "module",
   "workspaces": [
@@ -82,7 +82,9 @@
     "research",
     "ai",
     "mcp",
-    "agents"
+    "agents",
+    "langchain",
+    "agent-tools"
   ],
   "license": "MIT"
 }

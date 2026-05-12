@@ -1,7 +1,7 @@
 {
   "name": "@veritas/sdk",
   "version": "1.0.0",
-  "description": "Veritas — MCP-native research intelligence platform JavaScript SDK",
+  "description": "JavaScript SDK for using Veritas research in AI agents",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -20,7 +20,9 @@
     "ai",
     "mcp",
     "api",
-    "sdk"
+    "sdk",
+    "langchain",
+    "agent-tools"
   ],
   "author": "Veritas",
   "license": "MIT",
